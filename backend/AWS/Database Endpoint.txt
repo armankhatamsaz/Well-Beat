@@ -1,0 +1,8 @@
+Database Endpoint:
+
+well-beat-db.cxm8ui4akb82.eu-south-1.rds.amazonaws.com
+
+Port:
+5432
+
+
