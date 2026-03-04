@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 
-// Helper function to calculate streak
 const calculateStreak = (history) => {
     if (!history || history.length === 0) return 0;
     const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -40,6 +39,16 @@ const calculateAge = (birthDate) => {
     return age;
 };
 
+// --- موتور هش برای تبدیل ایمیل به یک User ID یکتا و ثابت ---
+const generateUserId = (email) => {
+    if (!email) return 1;
+    let hash = 0;
+    for (let i = 0; i < email.length; i++) {
+        hash = email.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    return Math.abs(hash); // همیشه یک عدد مثبت میده
+};
+
 export const useHealthStore = create((set, get) => ({
     isAuthenticated: false,
     user: null,
@@ -58,7 +67,6 @@ export const useHealthStore = create((set, get) => ({
         smoker: false,
         diabetes: false,
         familyHistory: false,
-        // --- TRR New Fields ---
         height: 175,
         weight: 70,
         arrhythmia: false,
@@ -67,10 +75,13 @@ export const useHealthStore = create((set, get) => ({
 
     assessment: null,
 
-    // --- ۱. گرفتن تاریخچه از AWS هنگام ورود ---
     login: async (userData) => {
+        // ساخت آیدی یکتا بر اساس ایمیل کاربر
+        const uniqueUserId = generateUserId(userData.email);
+
         try {
-            const response = await fetch("https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/1");
+            // حالا از آمازون دیتای همین آیدیِ خاص رو می‌خوایم!
+            const response = await fetch(`https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/${uniqueUserId}`);
             const dbData = await response.json();
             
             let realHistory = [];
@@ -91,9 +102,9 @@ export const useHealthStore = create((set, get) => ({
             set({
                 isAuthenticated: true,
                 user: {
-                    name: userData.name || 'Alex Doe',
-                    email: userData.email || 'alex.doe@example.com',
-                    avatar: userData.avatar || 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alex',
+                    name: userData.name,
+                    email: userData.email,
+                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`,
                     height: 175,
                     weight: 70,
                     streak: currentStreak,
@@ -123,15 +134,15 @@ export const useHealthStore = create((set, get) => ({
         userMetrics: { ...state.userMetrics, ...metrics }
     })),
 
-    // --- ۲. ارسال دیتا به AWS برای محاسبه ---
     runAssessment: async () => {
         const { userMetrics, user } = get();
         const currentAge = calculateAge(user?.birthDate);
         const metricsWithAge = { ...userMetrics, age: currentAge };
+        
+        const uniqueUserId = generateUserId(user?.email); // گرفتن آیدی برای ذخیره
 
-        // پکیج کردن دیتا دقیقاً مطابق مدل پایتون
         const payload = {
-            user_id: 1, 
+            user_id: uniqueUserId, // خداحافظی با آیدی هاردکد شده!
             age: metricsWithAge.age,
             gender: metricsWithAge.gender,
             smoker: metricsWithAge.smoker,
@@ -140,7 +151,6 @@ export const useHealthStore = create((set, get) => ({
             hdl: metricsWithAge.hdl,
             diabetes: metricsWithAge.diabetes,
             family_history: metricsWithAge.familyHistory,
-            // --- TRR New Payload ---
             height: metricsWithAge.height || 175,
             weight: metricsWithAge.weight || 70,
             arrhythmia: metricsWithAge.arrhythmia || false,
@@ -155,13 +165,12 @@ export const useHealthStore = create((set, get) => ({
             });
             const data = await response.json();
 
-            // مپ کردن دیتای بک‌اند برای نمایش در فرانت‌اند
             const parsedScore = parseFloat(data.calculated_risk_score);
             const result = {
                 riskScore: parsedScore,
                 riskCategory: data.risk_category,
                 heartAge: metricsWithAge.age + (data.risk_category === "High" ? 10 : data.risk_category === "Intermediate" ? 5 : 0),
-                recommendations: data.recommendations // NEW: گرفتن توصیه‌ها برای پاپ‌آپ
+                recommendations: data.recommendations
             };
 
             const legacyMetrics = {
