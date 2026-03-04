@@ -30,7 +30,7 @@ class RiskResultDB(Base):
     diabetes = Column(Boolean)
     family_history = Column(Boolean)
     
-    # --- New TRR Fields ---
+    # TRR Fields
     bmi = Column(Float)
     arrhythmia = Column(Boolean)
     high_pollution_exposure = Column(Boolean)
@@ -41,8 +41,7 @@ class RiskResultDB(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- Smart Database Migration (Auto-add new columns) ---
-# --- Smart Database Migration (Auto-add new columns) ---
+# --- Smart Database Migration (Auto-add new columns safely) ---
 with engine.begin() as conn:
     columns_to_add = [
         "bmi FLOAT", 
@@ -53,7 +52,7 @@ with engine.begin() as conn:
         try:
             conn.execute(text(f"ALTER TABLE risk_results ADD COLUMN {col}"))
         except Exception:
-            pass # If this specific column exists, skip and try the next one
+            pass # If column exists, just move on to the next one safely
 
 app = FastAPI(title="WELL-BEAT API - TRR Version")
 
@@ -72,23 +71,23 @@ def get_db():
     finally:
         db.close()
 
-# --- 3. Input Models ---
+# --- 3. Input Models (Updated for TRR) ---
 class RiskInputSchema(BaseModel):
     user_id: int
-    age: int = Field(gt=19, lt=101) 
+    age: int
     gender: str 
-    height: float = Field(gt=50, lt=250, description="Height in cm")
-    weight: float = Field(gt=20, lt=300, description="Weight in kg")
+    height: float
+    weight: float
     smoker: bool
-    systolic_bp: int = Field(gt=79, lt=251)
-    ldl: int = Field(gt=10, lt=500)
-    hdl: int = Field(gt=10, lt=150)
+    systolic_bp: int
+    ldl: int
+    hdl: int
     diabetes: bool
     family_history: bool
     arrhythmia: bool
     high_pollution_exposure: bool
 
-# --- 4. Engine ---
+# --- 4. Engine (With BMI & New Factors) ---
 def calculate_continuous_risk(data: RiskInputSchema):
     total_chol = data.ldl + data.hdl + 30 
     is_male = data.gender.lower() == 'male'
@@ -107,7 +106,7 @@ def calculate_continuous_risk(data: RiskInputSchema):
         if data.diabetes: sum_beta += 0.57367
         
         # TRR Custom Risk Factors
-        if data.high_pollution_exposure: sum_beta += 0.65451 # Doubles the smoking effect
+        if data.high_pollution_exposure: sum_beta += 0.65451 # Doubles smoking effect
         if data.arrhythmia: sum_beta += 0.60
         if bmi >= 30: sum_beta += 0.25
         elif bmi >= 25: sum_beta += 0.11
@@ -120,7 +119,7 @@ def calculate_continuous_risk(data: RiskInputSchema):
         if data.diabetes: sum_beta += 0.69154
         
         # TRR Custom Risk Factors
-        if data.high_pollution_exposure: sum_beta += 0.52873 # Doubles the smoking effect
+        if data.high_pollution_exposure: sum_beta += 0.52873 # Doubles smoking effect
         if data.arrhythmia: sum_beta += 0.60
         if bmi >= 30: sum_beta += 0.25
         elif bmi >= 25: sum_beta += 0.11

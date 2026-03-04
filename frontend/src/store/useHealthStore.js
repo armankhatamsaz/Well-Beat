@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+// Helper function to calculate streak
 const calculateStreak = (history) => {
     if (!history || history.length === 0) return 0;
     const sortedHistory = [...history].sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -39,14 +40,14 @@ const calculateAge = (birthDate) => {
     return age;
 };
 
-// --- موتور هش برای تبدیل ایمیل به یک User ID یکتا و ثابت ---
+// --- موتور هش برای ساخت یک User ID عددی و یکتا از روی ایمیل ---
 const generateUserId = (email) => {
     if (!email) return 1;
     let hash = 0;
     for (let i = 0; i < email.length; i++) {
         hash = email.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return Math.abs(hash); // همیشه یک عدد مثبت میده
+    return Math.abs(hash); 
 };
 
 export const useHealthStore = create((set, get) => ({
@@ -75,12 +76,11 @@ export const useHealthStore = create((set, get) => ({
 
     assessment: null,
 
+    // --- ۱. گرفتن تاریخچه ---
     login: async (userData) => {
-        // ساخت آیدی یکتا بر اساس ایمیل کاربر
         const uniqueUserId = generateUserId(userData.email);
 
         try {
-            // حالا از آمازون دیتای همین آیدیِ خاص رو می‌خوایم!
             const response = await fetch(`https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/${uniqueUserId}`);
             const dbData = await response.json();
             
@@ -104,6 +104,7 @@ export const useHealthStore = create((set, get) => ({
                 user: {
                     name: userData.name,
                     email: userData.email,
+                    // آواتار رسمی و شرکتی با حروف اول اسم (حل مشکل عکس تصادفی)
                     avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${userData.name || userData.email}&backgroundColor=2563eb&textColor=ffffff`,
                     height: 175,
                     weight: 70,
@@ -134,15 +135,17 @@ export const useHealthStore = create((set, get) => ({
         userMetrics: { ...state.userMetrics, ...metrics }
     })),
 
+    // --- ۲. ارسال پکیجِ کامل به آمازون ---
     runAssessment: async () => {
         const { userMetrics, user } = get();
         const currentAge = calculateAge(user?.birthDate);
         const metricsWithAge = { ...userMetrics, age: currentAge };
         
-        const uniqueUserId = generateUserId(user?.email); // گرفتن آیدی برای ذخیره
+        const uniqueUserId = generateUserId(user?.email);
 
+        // این همون پکیجیه که پایتونِ جدید منتظرشه!
         const payload = {
-            user_id: uniqueUserId, // خداحافظی با آیدی هاردکد شده!
+            user_id: uniqueUserId, 
             age: metricsWithAge.age,
             gender: metricsWithAge.gender,
             smoker: metricsWithAge.smoker,
@@ -163,6 +166,13 @@ export const useHealthStore = create((set, get) => ({
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             });
+            
+            if (!response.ok) {
+                 const errorData = await response.json();
+                 console.error("AWS Validation Error Details:", errorData);
+                 throw new Error("Validation Error from AWS");
+            }
+            
             const data = await response.json();
 
             const parsedScore = parseFloat(data.calculated_risk_score);
@@ -183,7 +193,7 @@ export const useHealthStore = create((set, get) => ({
             get().saveAssessment(result, legacyMetrics);
 
         } catch (error) {
-            console.error("AWS Validation/Network Error:", error);
+            console.error("AWS Request Failed:", error);
             alert("Error connecting to AWS Server. Check console.");
         }
     },
