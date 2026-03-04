@@ -1,26 +1,67 @@
-import React from 'react';
+import React, { useEffect } from 'react';
+import { useAuth } from "react-oidc-context";
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
-import Login from './components/Login';
 import { useHealthStore } from './store/useHealthStore';
-
 import ProfileView from './components/ProfileView';
-
 import HomeView from './components/HomeView';
 
 function App() {
+  const auth = useAuth(); // هوکِ آمازون کاگنیتو
   const assessment = useHealthStore((state) => state.assessment);
-  const isAuthenticated = useHealthStore((state) => state.isAuthenticated);
+  const isAuthenticatedStore = useHealthStore((state) => state.isAuthenticated);
   const currentView = useHealthStore((state) => state.currentView);
+  const loginStore = useHealthStore((state) => state.login);
 
-  if (!isAuthenticated) {
+  // سینک کردنِ دیتای آمازون با سیستمِ عصبی سایت خودمون
+  useEffect(() => {
+    if (auth.isAuthenticated && !isAuthenticatedStore) {
+      // گرفتن ایمیل کاربر از توکن آمازون
+      const userEmail = auth.user?.profile?.email || 'User';
+      const userName = auth.user?.profile?.name || userEmail.split('@')[0];
+      
+      loginStore({
+        name: userName,
+        email: userEmail,
+      });
+    }
+  }, [auth.isAuthenticated, isAuthenticatedStore, loginStore, auth.user]);
+
+  // صفحه لودینگِ زمانِ اتصال به آمازون
+  if (auth.isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+         <p className="text-slate-600 font-medium">Connecting to AWS Secure Server...</p>
+      </div>
+    );
+  }
+
+  if (auth.error) {
+    return <div className="p-8 text-rose-600">Authentication Error: {auth.error.message}</div>;
+  }
+
+  // اگر کاربر لاگین نکرده بود (فرم جدید لاگین متصل به آمازون)
+  if (!auth.isAuthenticated) {
     return (
       <Layout>
-        <Login />
+         <div className="flex flex-col items-center justify-center min-h-[60vh]">
+            <div className="bg-white p-8 rounded-3xl shadow-xl text-center max-w-md w-full border border-slate-100">
+                <h2 className="text-2xl font-bold text-deep-blue mb-2">Welcome to WellBeat</h2>
+                <p className="text-slate-500 mb-8">Secure your medical data with AWS Cognito.</p>
+                <button 
+                    onClick={() => auth.signinRedirect()}
+                    className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl transition-all shadow-lg flex justify-center items-center"
+                >
+                    Sign in / Register
+                </button>
+            </div>
+         </div>
       </Layout>
     );
   }
 
+  // بعد از لاگین موفق: نمایش داشبورد
   if (currentView === 'profile') {
     return (
       <Layout>
@@ -37,7 +78,6 @@ function App() {
     );
   }
 
-  // Default to Home Dashboard
   return (
     <Layout>
       <HomeView />
