@@ -57,7 +57,12 @@ export const useHealthStore = create((set, get) => ({
         hdl: 50,
         smoker: false,
         diabetes: false,
-        familyHistory: false
+        familyHistory: false,
+        // --- TRR New Fields ---
+        height: 175,
+        weight: 70,
+        arrhythmia: false,
+        high_pollution_exposure: false
     },
 
     assessment: null,
@@ -65,7 +70,6 @@ export const useHealthStore = create((set, get) => ({
     // --- ۱. گرفتن تاریخچه از AWS هنگام ورود ---
     login: async (userData) => {
         try {
-            // اتصال به دیتابیس میلان (آیدی ۱ به عنوان تست)
             const response = await fetch("https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/1");
             const dbData = await response.json();
             
@@ -100,7 +104,6 @@ export const useHealthStore = create((set, get) => ({
             });
         } catch (error) {
             console.error("Error fetching AWS history:", error);
-            // Fallback in case of network error
             set({ isAuthenticated: true, user: { ...userData, history: [], streak: 0 } });
         }
     },
@@ -136,7 +139,12 @@ export const useHealthStore = create((set, get) => ({
             ldl: metricsWithAge.ldl,
             hdl: metricsWithAge.hdl,
             diabetes: metricsWithAge.diabetes,
-            family_history: metricsWithAge.familyHistory
+            family_history: metricsWithAge.familyHistory,
+            // --- TRR New Payload ---
+            height: metricsWithAge.height || 175,
+            weight: metricsWithAge.weight || 70,
+            arrhythmia: metricsWithAge.arrhythmia || false,
+            high_pollution_exposure: metricsWithAge.high_pollution_exposure || false
         };
 
         try {
@@ -152,10 +160,10 @@ export const useHealthStore = create((set, get) => ({
             const result = {
                 riskScore: parsedScore,
                 riskCategory: data.risk_category,
-                heartAge: metricsWithAge.age + (data.risk_category === "High" ? 10 : data.risk_category === "Intermediate" ? 5 : 0)
+                heartAge: metricsWithAge.age + (data.risk_category === "High" ? 10 : data.risk_category === "Intermediate" ? 5 : 0),
+                recommendations: data.recommendations // NEW: گرفتن توصیه‌ها برای پاپ‌آپ
             };
 
-            // برای اینکه کدهای اکشن‌پلن الکس کار کنه (تبدیل به فرمت قبلی)
             const legacyMetrics = {
                 ...metricsWithAge,
                 smoking: metricsWithAge.smoker ? 1 : 0,
@@ -163,8 +171,6 @@ export const useHealthStore = create((set, get) => ({
             };
 
             set({ assessment: result, userMetrics: legacyMetrics });
-            
-            // فراخوانی ذخیره محلی برای آپدیت گرافیک‌ها
             get().saveAssessment(result, legacyMetrics);
 
         } catch (error) {

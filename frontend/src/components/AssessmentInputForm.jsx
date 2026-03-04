@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Droplet, User, Calendar, Cigarette, AlertCircle } from 'lucide-react';
+import { Activity, Droplet, User, Calendar, Cigarette, AlertCircle, Wind, HeartPulse } from 'lucide-react';
 import { useHealthStore } from '../store/useHealthStore';
 
 const AssessmentInputForm = () => {
@@ -19,7 +19,12 @@ const AssessmentInputForm = () => {
         ldl: userMetrics.ldl || 100,
         hdl: userMetrics.hdl || 50,
         diabetes: userMetrics.diabetes || false,
-        familyHistory: userMetrics.familyHistory || false
+        familyHistory: userMetrics.familyHistory || false,
+        // --- TRR New Fields ---
+        height: userMetrics.height || 175,
+        weight: userMetrics.weight || 70,
+        arrhythmia: userMetrics.arrhythmia || false,
+        highPollution: userMetrics.high_pollution_exposure || false
     });
 
     const handleChange = (field, value) => {
@@ -36,7 +41,12 @@ const AssessmentInputForm = () => {
             ldl: Number(formData.ldl),
             hdl: Number(formData.hdl),
             diabetes: formData.diabetes === 'true' || formData.diabetes === true,
-            familyHistory: formData.familyHistory === 'true' || formData.familyHistory === true
+            familyHistory: formData.familyHistory === 'true' || formData.familyHistory === true,
+            // --- TRR New Fields ---
+            height: Number(formData.height),
+            weight: Number(formData.weight),
+            arrhythmia: formData.arrhythmia === 'true' || formData.arrhythmia === true,
+            high_pollution_exposure: formData.highPollution === 'true' || formData.highPollution === true
         });
 
         const currentYear = new Date().getFullYear();
@@ -57,6 +67,7 @@ const AssessmentInputForm = () => {
             <h3 className="text-xl font-bold text-slate-900 mb-6">Enter Medical Data</h3>
 
             <div className="space-y-6">
+                {/* Age, Gender, Height, Weight Grid */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -73,8 +84,21 @@ const AssessmentInputForm = () => {
                             <option value="female">Female</option>
                         </select>
                     </div>
+                    <div className="space-y-3">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                            Height (cm)
+                        </label>
+                        <input type="number" value={formData.height} onChange={(e) => handleChange('height', e.target.value)} min="50" max="250" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
+                    </div>
+                    <div className="space-y-3">
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
+                            Weight (kg)
+                        </label>
+                        <input type="number" value={formData.weight} onChange={(e) => handleChange('weight', e.target.value)} min="20" max="300" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
+                    </div>
                 </div>
 
+                {/* Vitals */}
                 <div className="space-y-3">
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                         <Activity size={18} className="text-rose-500" /> Systolic Blood Pressure
@@ -85,6 +109,7 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
+                {/* Lipids */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -100,6 +125,7 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
+                {/* Basic Conditions */}
                 <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><Cigarette size={18} className="text-slate-500" /> Smoker</label>
@@ -116,8 +142,26 @@ const AssessmentInputForm = () => {
                         </select>
                     </div>
                     <div className="space-y-3">
-                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><User size={18} className="text-indigo-500" /> Family Hist.</label>
+                        <label title="First-degree relative (parent/sibling) with heart disease or diabetes" className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-help border-b border-dotted border-slate-400 w-max"><User size={18} className="text-indigo-500" /> Family Hist. ℹ️</label>
                         <select value={formData.familyHistory} onChange={(e) => handleChange('familyHistory', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium">
+                            <option value={false}>No</option>
+                            <option value={true}>Yes</option>
+                        </select>
+                    </div>
+                </div>
+
+                {/* TRR Advanced Conditions */}
+                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 mt-2">
+                    <div className="space-y-3">
+                        <label className="flex items-center gap-2 text-sm font-bold text-rose-600"><HeartPulse size={18} /> Arrhythmia</label>
+                        <select value={formData.arrhythmia} onChange={(e) => handleChange('arrhythmia', e.target.value)} className="w-full p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-xl outline-none font-medium focus:ring-2 focus:ring-rose-500">
+                            <option value={false}>No</option>
+                            <option value={true}>Yes</option>
+                        </select>
+                    </div>
+                    <div className="space-y-3">
+                        <label title=">50 days/year in high AQI area" className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-help border-b border-dotted border-slate-400 w-max"><Wind size={18} className="text-slate-400" /> High Pollution</label>
+                        <select value={formData.highPollution} onChange={(e) => handleChange('highPollution', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl outline-none font-medium focus:ring-2 focus:ring-slate-500">
                             <option value={false}>No</option>
                             <option value={true}>Yes</option>
                         </select>
