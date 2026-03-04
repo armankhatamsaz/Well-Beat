@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, Field
@@ -30,15 +30,28 @@ class RiskResultDB(Base):
     diabetes = Column(Boolean)
     family_history = Column(Boolean)
     
+    # --- New TRR Fields ---
+    bmi = Column(Float)
+    arrhythmia = Column(Boolean)
+    high_pollution_exposure = Column(Boolean)
+    
     calculated_risk_score = Column(Float)
     risk_category = Column(String)
     test_date = Column(DateTime, default=datetime.utcnow)
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="WELL-BEAT API - Full System")
+# --- Smart Database Migration (Auto-add new columns) ---
+with engine.begin() as conn:
+    try:
+        conn.execute(text("ALTER TABLE risk_results ADD COLUMN bmi FLOAT"))
+        conn.execute(text("ALTER TABLE risk_results ADD COLUMN arrhythmia BOOLEAN"))
+        conn.execute(text("ALTER TABLE risk_results ADD COLUMN high_pollution_exposure BOOLEAN"))
+    except Exception:
+        pass # Columns already exist, moving on!
 
-# --- اضافه شدن بادیگارد CORS برای اجازه دادن به مرورگر ---
+app = FastAPI(title="WELL-BEAT API - TRR Version")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -57,19 +70,26 @@ def get_db():
 # --- 3. Input Models ---
 class RiskInputSchema(BaseModel):
     user_id: int
-    age: int = Field(gt=19, lt=101, description="Age must be between 20 and 100") 
+    age: int = Field(gt=19, lt=101) 
     gender: str 
+    height: float = Field(gt=50, lt=250, description="Height in cm")
+    weight: float = Field(gt=20, lt=300, description="Weight in kg")
     smoker: bool
-    systolic_bp: int = Field(gt=79, lt=251, description="Systolic BP must be between 80 and 250")
+    systolic_bp: int = Field(gt=79, lt=251)
     ldl: int = Field(gt=10, lt=500)
     hdl: int = Field(gt=10, lt=150)
     diabetes: bool
     family_history: bool
+    arrhythmia: bool
+    high_pollution_exposure: bool
 
 # --- 4. Engine ---
 def calculate_continuous_risk(data: RiskInputSchema):
     total_chol = data.ldl + data.hdl + 30 
     is_male = data.gender.lower() == 'male'
+    
+    # Calculate BMI
+    bmi = data.weight / ((data.height / 100) ** 2)
     
     ln_age = math.log(data.age)
     ln_chol = math.log(total_chol)
@@ -80,12 +100,26 @@ def calculate_continuous_risk(data: RiskInputSchema):
         sum_beta = (3.06117 * ln_age) + (1.12370 * ln_chol) - (0.93263 * ln_hdl) + (1.93303 * ln_sbp)
         if data.smoker: sum_beta += 0.65451
         if data.diabetes: sum_beta += 0.57367
+        
+        # TRR Custom Risk Factors
+        if data.high_pollution_exposure: sum_beta += 0.65451 # Doubles the smoking effect
+        if data.arrhythmia: sum_beta += 0.60
+        if bmi >= 30: sum_beta += 0.25
+        elif bmi >= 25: sum_beta += 0.11
+        
         mean_beta = 23.9802
         baseline_survival = 0.88936
     else:
         sum_beta = (2.32888 * ln_age) + (1.20904 * ln_chol) - (0.70833 * ln_hdl) + (2.76157 * ln_sbp)
         if data.smoker: sum_beta += 0.52873
         if data.diabetes: sum_beta += 0.69154
+        
+        # TRR Custom Risk Factors
+        if data.high_pollution_exposure: sum_beta += 0.52873 # Doubles the smoking effect
+        if data.arrhythmia: sum_beta += 0.60
+        if bmi >= 30: sum_beta += 0.25
+        elif bmi >= 25: sum_beta += 0.11
+        
         mean_beta = 26.1931
         baseline_survival = 0.95012
 
@@ -96,12 +130,12 @@ def calculate_continuous_risk(data: RiskInputSchema):
     elif 10.0 <= risk_percentage < 20.0: category = "Intermediate"
     else: category = "High"
     
-    return risk_percentage, category
+    return risk_percentage, category, bmi
 
 # --- 5. API Endpoint 1: محاسبه و ذخیره ---
 @app.post("/risk/static")
 def get_static_risk(data: RiskInputSchema, db: Session = Depends(get_db)):
-    current_risk, risk_category = calculate_continuous_risk(data)
+    current_risk, risk_category, calculated_bmi = calculate_continuous_risk(data)
     
     db_record = RiskResultDB(
         user_id=data.user_id,
@@ -113,17 +147,21 @@ def get_static_risk(data: RiskInputSchema, db: Session = Depends(get_db)):
         hdl=data.hdl,
         diabetes=data.diabetes,
         family_history=data.family_history,
+        bmi=calculated_bmi,
+        arrhythmia=data.arrhythmia,
+        high_pollution_exposure=data.high_pollution_exposure,
         calculated_risk_score=current_risk,
         risk_category=risk_category
     )
     db.add(db_record)  
     db.commit()        
     
+    # Dynamic Recommendations List
     recommendations = []
     if data.smoker:
         ideal_data = data.copy()
         ideal_data.smoker = False
-        ideal_risk, _ = calculate_continuous_risk(ideal_data)
+        ideal_risk, _, _ = calculate_continuous_risk(ideal_data)
         reduction = round(current_risk - ideal_risk, 1)
         if reduction > 0:
             recommendations.append(f"Quitting smoking could lower your 10-year CVD risk by {reduction}%.")
@@ -131,10 +169,18 @@ def get_static_risk(data: RiskInputSchema, db: Session = Depends(get_db)):
     if data.systolic_bp > 120:
         ideal_data = data.copy()
         ideal_data.systolic_bp = 120
-        ideal_risk, _ = calculate_continuous_risk(ideal_data)
+        ideal_risk, _, _ = calculate_continuous_risk(ideal_data)
         reduction = round(current_risk - ideal_risk, 1)
         if reduction > 0:
             recommendations.append(f"Lowering your blood pressure to 120 mmHg could reduce your risk by {reduction}%.")
+            
+    # New TRR Recommendations
+    if calculated_bmi >= 25:
+        recommendations.append(f"Your BMI is {round(calculated_bmi, 1)}. Reaching a healthy weight can significantly reduce cardiac stress.")
+    if data.arrhythmia:
+        recommendations.append("Irregular heartbeat (Arrhythmia) detected. Medical supervision is strongly recommended.")
+    if data.high_pollution_exposure:
+        recommendations.append("High pollution acts like smoking. Consider air purifiers indoors and N95 masks on bad AQI days.")
 
     if risk_category == "Low": checkup = "Every 5 years"
     elif risk_category == "Intermediate": checkup = "Annually (Every 12 Months)"
