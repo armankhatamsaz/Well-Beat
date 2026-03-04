@@ -104,7 +104,7 @@ export const useHealthStore = create((set, get) => ({
                 user: {
                     name: userData.name,
                     email: userData.email,
-                    avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${userData.email}`,
+                    avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${userData.name || userData.email}&backgroundColor=2563eb&textColor=ffffff`,
                     height: 175,
                     weight: 70,
                     streak: currentStreak,
