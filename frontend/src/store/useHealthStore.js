@@ -41,13 +41,15 @@ const calculateAge = (birthDate) => {
 };
 
 // --- موتور هش برای ساخت یک User ID عددی و یکتا از روی ایمیل ---
+// --- موتور هش (آپدیت شده برای جلوگیری از انفجار دیتابیس) ---
 const generateUserId = (email) => {
     if (!email) return 1;
     let hash = 0;
     for (let i = 0; i < email.length; i++) {
         hash = email.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return Math.abs(hash); 
+    // اضافه شدن سقفِ مجاز برای دیتابیس (Max 32-bit Integer)
+    return Math.abs(hash) % 2147483647; 
 };
 
 export const useHealthStore = create((set, get) => ({
