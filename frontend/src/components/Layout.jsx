@@ -1,15 +1,21 @@
 import React from 'react';
 import { useHealthStore } from '../store/useHealthStore';
 import { LogOut, Flame, Activity } from 'lucide-react';
+import { useAuth } from 'react-oidc-context'; // اضافه شدن بادیگارد آمازون
 
 const Layout = ({ children }) => {
     const user = useHealthStore((state) => state.user);
-    const logout = useHealthStore((state) => state.logout);
+    const logoutStore = useHealthStore((state) => state.logout);
     const setView = useHealthStore((state) => state.setView);
+    const auth = useAuth(); // فعال‌سازی هوک
+
+    const handleLogout = () => {
+        logoutStore(); // ۱. پاک کردن دیتای داشبورد از روی مرورگر
+        auth.removeUser(); // ۲. پاک کردن کلیدهای امنیتی آمازون
+    };
 
     return (
         <div className="min-h-screen bg-soft-surface text-slate-900 font-sans selection:bg-medical-teal/20 selection:text-medical-teal">
-            {/* Subtle background pattern */}
             <div className="fixed inset-0 -z-10 h-full w-full bg-soft-surface [background:radial-gradient(125%_125%_at_50%_10%,#fff_40%,#e0f2f1_100%)] opacity-60 pointer-events-none"></div>
 
             <header className="sticky top-0 z-50 bg-white/80 backdrop-blur-xl border-b border-slate-200/60">
@@ -24,7 +30,6 @@ const Layout = ({ children }) => {
                     <nav className="flex items-center gap-4">
                         {user && (
                             <>
-                                {/* Streak Counter */}
                                 <div className="hidden sm:flex items-center gap-1.5 bg-orange-50 px-3 py-1.5 rounded-full border border-orange-100 shadow-sm">
                                     <Flame className="text-orange-500 fill-orange-500" size={16} />
                                     <span className="text-sm font-bold text-orange-700">{user.streak || 0} Day Streak</span>
@@ -45,7 +50,7 @@ const Layout = ({ children }) => {
                                         </div>
                                     </button>
                                     <button
-                                        onClick={logout}
+                                        onClick={handleLogout} // وصل شد به تابعِ خروجِ اصلی
                                         className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
                                         title="Sign Out"
                                     >
