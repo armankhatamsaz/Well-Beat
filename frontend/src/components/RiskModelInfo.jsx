@@ -53,19 +53,22 @@ const RiskModelInfo = () => {
                         <HeartPulse size={18} className="text-purple-600" />
                         Advanced Factors (TRR)
                     </h4>
-                    <ul className="text-sm text-purple-700 space-y-2">
-                        <li className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
-                            Arrhythmia (Irregular Heartbeat)
+                    <ul className="text-sm text-purple-700 space-y-3">
+                        <li className="flex items-start gap-2">
+                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full mt-1.5 shrink-0" />
+                            <span>Arrhythmia (Irregular Heartbeat)</span>
                         </li>
-                        <li className="flex items-center gap-2">
-                            <Wind size={14} className="text-purple-500" />
-                            High Pollution Exposure (AQI)
+                        <li className="flex items-start gap-2">
+                            <Wind size={16} className="text-purple-500 mt-0.5 shrink-0" />
+                            <div>
+                                <span className="block">High Pollution Exposure</span>
+                                <span className="text-xs text-purple-600/80 block mt-0.5">Living &gt;50 days/year in poor air quality areas.</span>
+                            </div>
                         </li>
                     </ul>
                 </div>
 
-                {/* New Family History Explanation */}
+                {/* Family History Explanation */}
                 <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
                     <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">
                         <Users size={18} className="text-indigo-600" />
