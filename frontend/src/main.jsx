@@ -11,7 +11,7 @@ const cognitoAuthConfig = {
   client_id: "1fsqemb8fhmhon198oafnbv48u",
   redirect_uri: "https://main.d184n5jh1hilpp.amplifyapp.com/",
   response_type: "code",
-  scope: "phone openid email",
+  scope: "phone openid email profile", // کلمه profile اضافه شد!
 };
 
 createRoot(document.getElementById('root')).render(
