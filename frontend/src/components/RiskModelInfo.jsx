@@ -1,6 +1,5 @@
 import React from 'react';
-import { Info, User, Activity, Droplet, Cigarette } from 'lucide-react';
-import { useHealthStore } from '../store/useHealthStore';
+import { Info, User, Activity, HeartPulse, Wind } from 'lucide-react';
 
 const RiskModelInfo = () => {
     return (
@@ -23,7 +22,7 @@ const RiskModelInfo = () => {
                         Profile Factors
                     </h4>
                     <p className="text-sm text-slate-500">
-                        Your <strong>Age</strong> and <strong>Gender</strong> provide the baseline for the calculation. You can enter these directly in the form.
+                        Your <strong>Age</strong>, <strong>Gender</strong>, and <strong>BMI</strong> (Height & Weight) provide the baseline for the calculation. You can enter these directly in the form.
                     </p>
                 </div>
 
@@ -39,11 +38,29 @@ const RiskModelInfo = () => {
                         </li>
                         <li className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 bg-amber-400 rounded-full" />
-                            Cholesterol Levels (Total & HDL)
+                            Cholesterol Levels (LDL & HDL)
                         </li>
                         <li className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 bg-slate-400 rounded-full" />
-                            Smoking Habits
+                            Smoking Habits & Diabetes
+                        </li>
+                    </ul>
+                </div>
+
+                {/* New TRR Section */}
+                <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
+                    <h4 className="font-bold text-purple-900 mb-2 flex items-center gap-2">
+                        <HeartPulse size={18} className="text-purple-600" />
+                        Advanced Factors (TRR)
+                    </h4>
+                    <ul className="text-sm text-purple-700 space-y-2">
+                        <li className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 bg-purple-500 rounded-full" />
+                            Arrhythmia (Irregular Heartbeat)
+                        </li>
+                        <li className="flex items-center gap-2">
+                            <Wind size={14} className="text-purple-500" />
+                            High Pollution Exposure (AQI)
                         </li>
                     </ul>
                 </div>

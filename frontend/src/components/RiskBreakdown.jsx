@@ -4,16 +4,15 @@ import { motion } from 'framer-motion';
 
 const RiskBreakdown = ({ metrics }) => {
     // Normalize metrics to a 0-100 scale where 100 is "High Risk"
-    // This is simplified logic for visualization
     const data = [
         {
             subject: 'Systolic BP',
-            A: Math.min(100, Math.max(0, (metrics.sbp - 110) * 2)), // 120 -> 20, 140 -> 60, 160 -> 100
+            A: Math.min(100, Math.max(0, (metrics.sbp - 110) * 2)), 
             fullMark: 100,
         },
         {
-            subject: 'Cholesterol',
-            A: Math.min(100, Math.max(0, (metrics.lipids.total - 150) * 1)), // 200 -> 50, 250 -> 100
+            subject: 'LDL (Bad)',
+            A: Math.min(100, Math.max(0, (metrics.ldl - 100) * 1.5)), // 100 -> 0 (good), 160 -> 90 (bad)
             fullMark: 100,
         },
         {
@@ -23,12 +22,12 @@ const RiskBreakdown = ({ metrics }) => {
         },
         {
             subject: 'Age',
-            A: Math.min(100, Math.max(0, (metrics.age - 30) * 1.5)), // 50 -> 30, 70 -> 60
+            A: Math.min(100, Math.max(0, (metrics.age - 30) * 1.5)), 
             fullMark: 100,
         },
         {
             subject: 'HDL (Good)',
-            A: Math.min(100, Math.max(0, (60 - metrics.lipids.hdl) * 3)), // Lower is worse risk. 40 -> 60, 60 -> 0
+            A: Math.min(100, Math.max(0, (60 - metrics.lipids.hdl) * 3)), // Lower is worse
             fullMark: 100,
         },
     ];
