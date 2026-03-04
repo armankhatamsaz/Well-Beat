@@ -1,5 +1,5 @@
 import React from 'react';
-import { Info, User, Activity, HeartPulse, Wind } from 'lucide-react';
+import { Info, User, Activity, HeartPulse, Wind, Users } from 'lucide-react';
 
 const RiskModelInfo = () => {
     return (
@@ -47,7 +47,7 @@ const RiskModelInfo = () => {
                     </ul>
                 </div>
 
-                {/* New TRR Section */}
+                {/* TRR Advanced Section */}
                 <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
                     <h4 className="font-bold text-purple-900 mb-2 flex items-center gap-2">
                         <HeartPulse size={18} className="text-purple-600" />
@@ -63,6 +63,17 @@ const RiskModelInfo = () => {
                             High Pollution Exposure (AQI)
                         </li>
                     </ul>
+                </div>
+
+                {/* New Family History Explanation */}
+                <div className="p-4 bg-indigo-50 rounded-xl border border-indigo-100">
+                    <h4 className="font-bold text-indigo-900 mb-2 flex items-center gap-2">
+                        <Users size={18} className="text-indigo-600" />
+                        Family History
+                    </h4>
+                    <p className="text-sm text-indigo-700">
+                        This refers <strong>only</strong> to first-degree relatives (parents or siblings) who have a history of heart disease or diabetes.
+                    </p>
                 </div>
             </div>
         </div>

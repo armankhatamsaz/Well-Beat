@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Droplet, User, Calendar, Cigarette, AlertCircle, Wind, HeartPulse } from 'lucide-react';
+import { Activity, Droplet, User, Calendar, Cigarette, AlertCircle, Wind, HeartPulse, Users } from 'lucide-react';
 import { useHealthStore } from '../store/useHealthStore';
 
 const AssessmentInputForm = () => {
@@ -20,7 +20,6 @@ const AssessmentInputForm = () => {
         hdl: userMetrics.hdl || 50,
         diabetes: userMetrics.diabetes || false,
         familyHistory: userMetrics.familyHistory || false,
-        // --- TRR New Fields ---
         height: userMetrics.height || 175,
         weight: userMetrics.weight || 70,
         arrhythmia: userMetrics.arrhythmia || false,
@@ -42,7 +41,6 @@ const AssessmentInputForm = () => {
             hdl: Number(formData.hdl),
             diabetes: formData.diabetes === 'true' || formData.diabetes === true,
             familyHistory: formData.familyHistory === 'true' || formData.familyHistory === true,
-            // --- TRR New Fields ---
             height: Number(formData.height),
             weight: Number(formData.weight),
             arrhythmia: formData.arrhythmia === 'true' || formData.arrhythmia === true,
@@ -55,7 +53,6 @@ const AssessmentInputForm = () => {
 
         updateProfile({ birthDate: mockBirthDate, gender: formData.gender });
 
-        // ارسال درخواست به آمازون
         await runAssessment();
         
         setIsLoading(false);
@@ -67,7 +64,6 @@ const AssessmentInputForm = () => {
             <h3 className="text-xl font-bold text-slate-900 mb-6">Enter Medical Data</h3>
 
             <div className="space-y-6">
-                {/* Age, Gender, Height, Weight Grid */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -98,7 +94,6 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
-                {/* Vitals */}
                 <div className="space-y-3">
                     <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                         <Activity size={18} className="text-rose-500" /> Systolic Blood Pressure
@@ -109,7 +104,6 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
-                {/* Lipids */}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -125,7 +119,6 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
-                {/* Basic Conditions */}
                 <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><Cigarette size={18} className="text-slate-500" /> Smoker</label>
@@ -142,7 +135,7 @@ const AssessmentInputForm = () => {
                         </select>
                     </div>
                     <div className="space-y-3">
-                        <label title="First-degree relative (parent/sibling) with heart disease or diabetes" className="flex items-center gap-2 text-sm font-bold text-slate-700 cursor-help border-b border-dotted border-slate-400 w-max"><User size={18} className="text-indigo-500" /> Family Hist. ℹ️</label>
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><Users size={18} className="text-indigo-500" /> Family Hist.</label>
                         <select value={formData.familyHistory} onChange={(e) => handleChange('familyHistory', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl outline-none font-medium">
                             <option value={false}>No</option>
                             <option value={true}>Yes</option>
@@ -150,7 +143,6 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
-                {/* TRR Advanced Conditions */}
                 <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 mt-2">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-rose-600"><HeartPulse size={18} /> Arrhythmia</label>
@@ -160,7 +152,7 @@ const AssessmentInputForm = () => {
                         </select>
                     </div>
                     <div className="space-y-3">
-                        <label title=">50 days/year in high AQI area" className="flex items-center gap-2 text-sm font-bold text-slate-600 cursor-help border-b border-dotted border-slate-400 w-max"><Wind size={18} className="text-slate-400" /> High Pollution</label>
+                        <label className="flex items-center gap-2 text-sm font-bold text-slate-600"><Wind size={18} className="text-slate-400" /> High Pollution</label>
                         <select value={formData.highPollution} onChange={(e) => handleChange('highPollution', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 text-slate-800 rounded-xl outline-none font-medium focus:ring-2 focus:ring-slate-500">
                             <option value={false}>No</option>
                             <option value={true}>Yes</option>
