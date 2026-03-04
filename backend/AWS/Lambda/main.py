@@ -42,13 +42,18 @@ class RiskResultDB(Base):
 Base.metadata.create_all(bind=engine)
 
 # --- Smart Database Migration (Auto-add new columns) ---
+# --- Smart Database Migration (Auto-add new columns) ---
 with engine.begin() as conn:
-    try:
-        conn.execute(text("ALTER TABLE risk_results ADD COLUMN bmi FLOAT"))
-        conn.execute(text("ALTER TABLE risk_results ADD COLUMN arrhythmia BOOLEAN"))
-        conn.execute(text("ALTER TABLE risk_results ADD COLUMN high_pollution_exposure BOOLEAN"))
-    except Exception:
-        pass # Columns already exist, moving on!
+    columns_to_add = [
+        "bmi FLOAT", 
+        "arrhythmia BOOLEAN", 
+        "high_pollution_exposure BOOLEAN"
+    ]
+    for col in columns_to_add:
+        try:
+            conn.execute(text(f"ALTER TABLE risk_results ADD COLUMN {col}"))
+        except Exception:
+            pass # If this specific column exists, skip and try the next one
 
 app = FastAPI(title="WELL-BEAT API - TRR Version")
 
