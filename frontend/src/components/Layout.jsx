@@ -2,6 +2,7 @@ import React from 'react';
 import { useHealthStore } from '../store/useHealthStore';
 import { LogOut, Flame, Activity } from 'lucide-react';
 import { useAuth } from 'react-oidc-context'; // اضافه شدن بادیگارد آمازون
+import GDPRBanner from './GDPRBanner'; // اضافه شدن پاپ‌آپ امنیتی
 
 const Layout = ({ children }) => {
     const user = useHealthStore((state) => state.user);
@@ -66,6 +67,9 @@ const Layout = ({ children }) => {
             <main className="max-w-7xl mx-auto px-6 py-8 relative">
                 {children}
             </main>
+
+            {/* اجرای پاپ‌آپ در تمام صفحات */}
+            <GDPRBanner />
         </div>
     );
 };
