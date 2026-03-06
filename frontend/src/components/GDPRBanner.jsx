@@ -1,52 +1,139 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShieldCheck, Cookie } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 const GDPRBanner = () => {
     const [isVisible, setIsVisible] = useState(false);
+    
+    // وضعیتِ سوییچ‌ها (Essential همیشه روشنه و غیرقابل تغییره)
+    const [marketing, setMarketing] = useState(false);
+    const [functional, setFunctional] = useState(false);
 
     useEffect(() => {
         // چک میکنه آیا کاربر قبلا قوانین رو قبول کرده یا نه
-        const consent = localStorage.getItem('gdpr_consent');
+        const consent = localStorage.getItem('gdpr_consent_v2');
         if (!consent) {
-            const timer = setTimeout(() => setIsVisible(true), 1500); // بعد از 1.5 ثانیه ظاهر میشه
-            return () => clearTimeout(timer);
+            // جلوگیری از اسکرول شدنِ صفحه تا وقتی پاپ‌آپ بازه
+            document.body.style.overflow = 'hidden';
+            setIsVisible(true);
         }
+
+        return () => {
+            document.body.style.overflow = 'unset';
+        };
     }, []);
 
-    const handleAccept = () => {
-        localStorage.setItem('gdpr_consent', 'true');
+    const closeAndSave = (type) => {
+        // ذخیره وضعیت تو مرورگر
+        localStorage.setItem('gdpr_consent_v2', 'true');
+        localStorage.setItem('gdpr_preferences', JSON.stringify({
+            essential: true,
+            marketing: type === 'all' ? true : marketing,
+            functional: type === 'all' ? true : functional
+        }));
+        
+        document.body.style.overflow = 'unset';
         setIsVisible(false);
     };
+
+    // کامپوننتِ داخلی برای ساختنِ دکمه‌های سوییچ (Toggle)
+    const ToggleSwitch = ({ label, checked, onChange, disabled }) => (
+        <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">{label}</span>
+            <button
+                type="button"
+                onClick={() => !disabled && onChange(!checked)}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                    checked ? 'bg-medical-teal' : 'bg-slate-300'
+                } ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+            >
+                <span 
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        checked ? 'translate-x-6' : 'translate-x-1'
+                    }`} 
+                />
+            </button>
+        </div>
+    );
 
     return (
         <AnimatePresence>
             {isVisible && (
-                <motion.div
-                    initial={{ y: 100, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: 100, opacity: 0 }}
-                    className="fixed bottom-4 left-4 right-4 md:left-auto md:right-8 md:bottom-8 md:max-w-md z-[100] bg-white p-6 rounded-2xl shadow-2xl border border-slate-200"
-                >
-                    <div className="flex gap-4 items-start">
-                        <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center shrink-0">
-                            <ShieldCheck className="text-blue-600" size={24} />
-                        </div>
-                        <div className="flex-1">
-                            <h4 className="text-lg font-bold text-slate-900 mb-1">Privacy & Data Security</h4>
-                            <p className="text-sm text-slate-500 leading-relaxed mb-4">
-                                Following EU <strong>GDPR</strong> guidelines, we use cookies and secure AWS architecture to process your health data safely. Your data is encrypted and never shared.
+                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+                    {/* پس‌زمینه تاریک و تار برای قفل کردنِ سایت */}
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                    />
+
+                    {/* باکسِ اصلیِ تنظیمات حریم خصوصی */}
+                    <motion.div
+                        initial={{ scale: 0.95, opacity: 0, y: 20 }}
+                        animate={{ scale: 1, opacity: 1, y: 0 }}
+                        exit={{ scale: 0.95, opacity: 0, y: 20 }}
+                        className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full relative z-10 overflow-hidden flex flex-col"
+                    >
+                        <div className="p-6 sm:p-8">
+                            <div className="flex items-center justify-center gap-3 mb-6">
+                                <ShieldCheck className="text-medical-teal" size={28} />
+                                <h2 className="text-2xl font-bold text-deep-blue">Privacy Settings</h2>
+                            </div>
+
+                            <p className="text-slate-600 text-sm sm:text-base leading-relaxed mb-8 text-center sm:text-left">
+                                This site uses third-party website tracking technologies to provide and continually improve our services, and to display advertisements according to users' interests. I agree and may revoke or change my consent at any time with effect for the future.
                             </p>
-                            <button
-                                onClick={handleAccept}
-                                className="w-full bg-deep-blue hover:bg-slate-800 text-white font-bold py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2"
-                            >
-                                <Cookie size={16} />
-                                Accept & Continue
-                            </button>
+
+                            {/* بخش سوییچ‌ها */}
+                            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-6 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-100">
+                                <ToggleSwitch 
+                                    label="Marketing" 
+                                    checked={marketing} 
+                                    onChange={setMarketing} 
+                                />
+                                <ToggleSwitch 
+                                    label="Functional" 
+                                    checked={functional} 
+                                    onChange={setFunctional} 
+                                />
+                                <ToggleSwitch 
+                                    label="Essential" 
+                                    checked={true} 
+                                    disabled={true} 
+                                />
+                            </div>
+
+                            {/* دکمه‌های اکشن (دقیقاً مثل عکس) */}
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                                <button 
+                                    onClick={() => closeAndSave('save')}
+                                    className="px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 rounded-xl transition-colors"
+                                >
+                                    More
+                                </button>
+                                <button 
+                                    onClick={() => closeAndSave('save')}
+                                    className="px-4 py-2.5 text-sm font-bold text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 rounded-xl transition-colors"
+                                >
+                                    Save Settings
+                                </button>
+                                <button 
+                                    onClick={() => closeAndSave('deny')}
+                                    className="px-4 py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 shadow-md shadow-rose-600/20 rounded-xl transition-colors"
+                                >
+                                    Deny
+                                </button>
+                                <button 
+                                    onClick={() => closeAndSave('all')}
+                                    className="px-4 py-2.5 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-md shadow-blue-600/30 rounded-xl transition-colors"
+                                >
+                                    Accept All
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                </motion.div>
+                    </motion.div>
+                </div>
             )}
         </AnimatePresence>
     );
