@@ -1,17 +1,20 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, AlertCircle, Activity, Scale } from 'lucide-react';
+import { useHealthStore } from '../store/useHealthStore';
 
 const RiskCard = ({ score, category }) => {
+    const assessment = useHealthStore((state) => state.assessment);
+
     const getColor = () => {
         if (category === 'Low') return 'text-emerald-700 bg-gradient-to-br from-emerald-50 to-white border-emerald-100 shadow-emerald-100/50';
-        if (category === 'Moderate') return 'text-amber-700 bg-gradient-to-br from-amber-50 to-white border-amber-100 shadow-amber-100/50';
+        if (category === 'Moderate' || category === 'Intermediate') return 'text-amber-700 bg-gradient-to-br from-amber-50 to-white border-amber-100 shadow-amber-100/50';
         return 'text-rose-700 bg-gradient-to-br from-rose-50 to-white border-rose-100 shadow-rose-100/50';
     };
 
     const getIcon = () => {
         if (category === 'Low') return <CheckCircle size={32} className="text-emerald-500" />;
-        if (category === 'Moderate') return <AlertTriangle size={32} className="text-amber-500" />;
+        if (category === 'Moderate' || category === 'Intermediate') return <AlertTriangle size={32} className="text-amber-500" />;
         return <AlertCircle size={32} className="text-rose-500" />;
     };
 
@@ -56,6 +59,26 @@ const RiskCard = ({ score, category }) => {
                     <span className="text-sm font-medium opacity-80">10-Year Risk</span>
                 </div>
             </div>
+
+            {/* بخش جدید برای نمایش BMI و ApoB */}
+            {assessment && (
+                <div className="grid grid-cols-2 gap-4 w-full mt-2 border-t border-current/10 pt-4">
+                    <div className="flex flex-col items-center justify-center">
+                        <div className="flex items-center gap-1.5 opacity-70 mb-1">
+                            <Scale size={14} />
+                            <span className="text-xs uppercase tracking-wider font-bold">BMI</span>
+                        </div>
+                        <span className="text-lg font-bold">{assessment.bmi}</span>
+                    </div>
+                    <div className="flex flex-col items-center justify-center border-l border-current/10">
+                        <div className="flex items-center gap-1.5 opacity-70 mb-1">
+                            <Activity size={14} />
+                            <span className="text-xs uppercase tracking-wider font-bold">ApoB</span>
+                        </div>
+                        <span className="text-lg font-bold">{assessment.apoB}</span>
+                    </div>
+                </div>
+            )}
         </motion.div>
     );
 };

@@ -1,8 +1,11 @@
 import React from 'react';
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer, Tooltip } from 'recharts';
 import { motion } from 'framer-motion';
+import { useHealthStore } from '../store/useHealthStore';
 
 const RiskBreakdown = ({ metrics }) => {
+    const assessment = useHealthStore((state) => state.assessment);
+
     // Normalize metrics to a 0-100 scale where 100 is "High Risk"
     const data = [
         {
@@ -12,7 +15,7 @@ const RiskBreakdown = ({ metrics }) => {
         },
         {
             subject: 'LDL (Bad)',
-            A: Math.min(100, Math.max(0, (metrics.ldl - 100) * 1.5)), // 100 -> 0 (good), 160 -> 90 (bad)
+            A: Math.min(100, Math.max(0, (metrics.ldl - 100) * 1.5)), 
             fullMark: 100,
         },
         {
@@ -27,9 +30,19 @@ const RiskBreakdown = ({ metrics }) => {
         },
         {
             subject: 'HDL (Good)',
-            A: Math.min(100, Math.max(0, (60 - metrics.lipids.hdl) * 3)), // Lower is worse
+            A: Math.min(100, Math.max(0, (60 - metrics.lipids.hdl) * 3)), 
             fullMark: 100,
         },
+        {
+            subject: 'BMI',
+            A: assessment?.bmi ? Math.min(100, Math.max(0, (assessment.bmi - 24) * 10)) : 0,
+            fullMark: 100,
+        },
+        {
+            subject: 'ApoB',
+            A: assessment?.apoB ? Math.min(100, Math.max(0, (assessment.apoB - 80) * 2)) : 0,
+            fullMark: 100,
+        }
     ];
 
     return (
@@ -44,9 +57,9 @@ const RiskBreakdown = ({ metrics }) => {
 
             <div className="flex-1 min-h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
-                    <RadarChart cx="50%" cy="50%" outerRadius="80%" data={data}>
+                    <RadarChart cx="50%" cy="50%" outerRadius="75%" data={data}>
                         <PolarGrid stroke="#e2e8f0" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 12, fontWeight: 600 }} />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }} />
                         <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                         <Radar
                             name="Risk Level"

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime, text
+from sqlalchemy import create_engine, Column, Integer, String, Float, Boolean, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, Field
@@ -39,21 +39,6 @@ class RiskResultDB(Base):
     risk_category = Column(String)
     test_date = Column(DateTime, default=datetime.utcnow)
 
-Base.metadata.create_all(bind=engine)
-
-# --- Smart Database Migration (Auto-add new columns safely) ---
-with engine.begin() as conn:
-    columns_to_add = [
-        "bmi FLOAT", 
-        "arrhythmia BOOLEAN", 
-        "high_pollution_exposure BOOLEAN"
-    ]
-    for col in columns_to_add:
-        try:
-            conn.execute(text(f"ALTER TABLE risk_results ADD COLUMN {col}"))
-        except Exception:
-            pass # If column exists, just move on to the next one safely
-
 app = FastAPI(title="WELL-BEAT API - TRR Version")
 
 app.add_middleware(
@@ -70,6 +55,13 @@ def get_db():
         yield db
     finally:
         db.close()
+
+# --- دکمه‌ی جادویی برای حل مشکل دیتابیس ---
+@app.get("/reset-db")
+def reset_database():
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    return {"message": "Database successfully reset and updated to TRR schema!"}
 
 # --- 3. Input Models (Updated for TRR) ---
 class RiskInputSchema(BaseModel):
@@ -106,7 +98,7 @@ def calculate_continuous_risk(data: RiskInputSchema):
         if data.diabetes: sum_beta += 0.57367
         
         # TRR Custom Risk Factors
-        if data.high_pollution_exposure: sum_beta += 0.65451 # Doubles smoking effect
+        if data.high_pollution_exposure: sum_beta += 0.65451
         if data.arrhythmia: sum_beta += 0.60
         if bmi >= 30: sum_beta += 0.25
         elif bmi >= 25: sum_beta += 0.11
@@ -119,7 +111,7 @@ def calculate_continuous_risk(data: RiskInputSchema):
         if data.diabetes: sum_beta += 0.69154
         
         # TRR Custom Risk Factors
-        if data.high_pollution_exposure: sum_beta += 0.52873 # Doubles smoking effect
+        if data.high_pollution_exposure: sum_beta += 0.52873
         if data.arrhythmia: sum_beta += 0.60
         if bmi >= 30: sum_beta += 0.25
         elif bmi >= 25: sum_beta += 0.11

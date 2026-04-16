@@ -40,15 +40,13 @@ const calculateAge = (birthDate) => {
     return age;
 };
 
-// --- موتور هش برای ساخت یک User ID عددی و یکتا از روی ایمیل ---
-// --- موتور هش (آپدیت شده برای جلوگیری از انفجار دیتابیس) ---
+// --- موتور هش با سقف امنیتی دیتابیس ---
 const generateUserId = (email) => {
     if (!email) return 1;
     let hash = 0;
     for (let i = 0; i < email.length; i++) {
         hash = email.charCodeAt(i) + ((hash << 5) - hash);
     }
-    // اضافه شدن سقفِ مجاز برای دیتابیس (Max 32-bit Integer)
     return Math.abs(hash) % 2147483647; 
 };
 
@@ -78,7 +76,6 @@ export const useHealthStore = create((set, get) => ({
 
     assessment: null,
 
-    // --- ۱. گرفتن تاریخچه ---
     login: async (userData) => {
         const uniqueUserId = generateUserId(userData.email);
 
@@ -106,7 +103,6 @@ export const useHealthStore = create((set, get) => ({
                 user: {
                     name: userData.name,
                     email: userData.email,
-                    // آواتار رسمی و شرکتی با حروف اول اسم (حل مشکل عکس تصادفی)
                     avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${userData.name || userData.email}&backgroundColor=2563eb&textColor=ffffff`,
                     height: 175,
                     weight: 70,
@@ -137,7 +133,6 @@ export const useHealthStore = create((set, get) => ({
         userMetrics: { ...state.userMetrics, ...metrics }
     })),
 
-    // --- ۲. ارسال پکیجِ کامل به آمازون ---
     runAssessment: async () => {
         const { userMetrics, user } = get();
         const currentAge = calculateAge(user?.birthDate);
@@ -145,7 +140,6 @@ export const useHealthStore = create((set, get) => ({
         
         const uniqueUserId = generateUserId(user?.email);
 
-        // این همون پکیجیه که پایتونِ جدید منتظرشه!
         const payload = {
             user_id: uniqueUserId, 
             age: metricsWithAge.age,
@@ -178,10 +172,14 @@ export const useHealthStore = create((set, get) => ({
             const data = await response.json();
 
             const parsedScore = parseFloat(data.calculated_risk_score);
+            
+            // تغییرات اصلی اینجاست: دریافت سن قلب و ApoB از بک‌اِند
             const result = {
                 riskScore: parsedScore,
                 riskCategory: data.risk_category,
-                heartAge: metricsWithAge.age + (data.risk_category === "High" ? 10 : data.risk_category === "Intermediate" ? 5 : 0),
+                heartAge: data.heart_age, // مستقیم از پایتون
+                apoB: data.estimated_apo_b, // مستقیم از پایتون
+                bmi: data.bmi, // مستقیم از پایتون
                 recommendations: data.recommendations
             };
 
