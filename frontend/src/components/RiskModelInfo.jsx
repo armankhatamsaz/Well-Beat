@@ -51,7 +51,7 @@ const RiskModelInfo = () => {
                 <div className="p-4 bg-purple-50 rounded-xl border border-purple-100">
                     <h4 className="font-bold text-purple-900 mb-2 flex items-center gap-2">
                         <HeartPulse size={18} className="text-purple-600" />
-                        Advanced Factors (TRR)
+                        Advanced Factors
                     </h4>
                     <ul className="text-sm text-purple-700 space-y-3">
                         <li className="flex items-start gap-2">
