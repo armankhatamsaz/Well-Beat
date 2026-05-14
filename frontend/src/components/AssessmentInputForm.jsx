@@ -10,6 +10,7 @@ const AssessmentInputForm = () => {
     const setView = useHealthStore((state) => state.setView);
     const updateProfile = useHealthStore((state) => state.updateProfile);
     const [isLoading, setIsLoading] = useState(false);
+    const [error, setError] = useState("");
 
     const [formData, setFormData] = useState({
         age: userMetrics.age || 45,
@@ -27,10 +28,21 @@ const AssessmentInputForm = () => {
     });
 
     const handleChange = (field, value) => {
+        setError(""); // پاک کردن خطا هنگام تغییر ورودی
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleCalculate = async () => {
+        // لایه اعتبارسنجی نهایی برای تست BVA (TRR Phase 1)
+        if (formData.age < 20 || formData.age > 100) {
+            setError("Age must be between 20 and 100.");
+            return;
+        }
+        if (formData.ldl < 10 || formData.ldl > 400 || formData.hdl < 10 || formData.hdl > 150) {
+            setError("Lipid values are out of physiological range.");
+            return;
+        }
+
         setIsLoading(true);
         setMetrics({
             age: Number(formData.age),
@@ -63,13 +75,19 @@ const AssessmentInputForm = () => {
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="bg-white p-8 rounded-3xl shadow-xl border border-slate-200 h-full overflow-y-auto">
             <h3 className="text-xl font-bold text-slate-900 mb-6">Enter Medical Data</h3>
 
+            {error && (
+                <div className="mb-4 p-3 bg-rose-50 border border-rose-200 text-rose-600 rounded-xl text-sm font-medium flex items-center gap-2">
+                    <AlertCircle size={16} /> {error}
+                </div>
+            )}
+
             <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                             <Calendar size={18} className="text-slate-500" /> Age
                         </label>
-                        <input type="number" value={formData.age} onChange={(e) => handleChange('age', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
+                        <input type="number" min="20" max="100" value={formData.age} onChange={(e) => handleChange('age', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
                     </div>
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -109,16 +127,17 @@ const AssessmentInputForm = () => {
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                             <Droplet size={18} className="text-amber-500" /> LDL Chol.
                         </label>
-                        <input type="number" value={formData.ldl} onChange={(e) => handleChange('ldl', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none font-medium" />
+                        <input type="number" min="10" max="400" value={formData.ldl} onChange={(e) => handleChange('ldl', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none font-medium" />
                     </div>
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                             <Droplet size={18} className="text-emerald-500" /> HDL Chol.
                         </label>
-                        <input type="number" value={formData.hdl} onChange={(e) => handleChange('hdl', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" />
+                        <input type="number" min="10" max="150" value={formData.hdl} onChange={(e) => handleChange('hdl', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" />
                     </div>
                 </div>
 
+                {/* بقیه فیلدها بدون تغییر باقی ماندند */}
                 <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><Cigarette size={18} className="text-slate-500" /> Smoker</label>
@@ -162,7 +181,7 @@ const AssessmentInputForm = () => {
 
                 <button onClick={handleCalculate} disabled={isLoading} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/30 flex items-center justify-center gap-2 transition-all active:scale-[0.98] mt-4 disabled:opacity-50">
                     <Activity size={20} />
-                    {isLoading ? "Calculating on AWS..." : "Calculate & Save"}
+                    {isLoading ? "Validating & Calculating..." : "Calculate & Save"}
                 </button>
             </div>
         </motion.div>
