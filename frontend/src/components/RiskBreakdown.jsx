@@ -9,12 +9,12 @@ const RiskBreakdown = ({ metrics }) => {
     // Normalize metrics to a 0-100 scale where 100 is "High Risk"
     const data = [
         {
-            subject: 'Systolic BP',
+            subject: 'Systolic BP (mmHg)',
             A: Math.min(100, Math.max(0, (metrics.sbp - 110) * 2)), 
             fullMark: 100,
         },
         {
-            subject: 'LDL (Bad)',
+            subject: 'LDL (mg/dL)',
             A: Math.min(100, Math.max(0, (metrics.ldl - 100) * 1.5)), 
             fullMark: 100,
         },
@@ -29,17 +29,17 @@ const RiskBreakdown = ({ metrics }) => {
             fullMark: 100,
         },
         {
-            subject: 'HDL (Good)',
+            subject: 'HDL (mg/dL)',
             A: Math.min(100, Math.max(0, (60 - metrics.lipids.hdl) * 3)), 
             fullMark: 100,
         },
         {
-            subject: 'BMI',
+            subject: 'BMI (kg/m²)',
             A: assessment?.bmi ? Math.min(100, Math.max(0, (assessment.bmi - 24) * 10)) : 0,
             fullMark: 100,
         },
         {
-            subject: 'ApoB',
+            subject: 'ApoB (mg/dL)',
             A: assessment?.apoB ? Math.min(100, Math.max(0, (assessment.apoB - 80) * 2)) : 0,
             fullMark: 100,
         }
@@ -53,13 +53,13 @@ const RiskBreakdown = ({ metrics }) => {
             className="bg-white p-6 rounded-3xl shadow-xl border border-slate-200 h-full flex flex-col"
         >
             <h3 className="text-lg font-bold text-deep-blue mb-2">Risk Factor Breakdown</h3>
-            <p className="text-sm text-slate-500 mb-4">Visualizing your primary risk contributors</p>
+            <p className="text-sm text-slate-500 mb-4">Visualizing your primary risk contributors with clinical units</p>
 
             <div className="flex-1 min-h-[250px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <RadarChart cx="50%" cy="50%" outerRadius="75%" data={data}>
                         <PolarGrid stroke="#e2e8f0" />
-                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 11, fontWeight: 600 }} />
+                        <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 600 }} />
                         <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                         <Radar
                             name="Risk Level"
