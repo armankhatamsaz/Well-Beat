@@ -76,11 +76,16 @@ export const useHealthStore = create((set, get) => ({
 
     assessment: null,
 
-    login: async (userData) => {
+    login: async (userData, token) => { // 👈 توکن امنیتی اینجا دریافت می‌شود
         const uniqueUserId = generateUserId(userData.email);
 
         try {
-            const response = await fetch(`https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/${uniqueUserId}`);
+            const response = await fetch(`https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/${uniqueUserId}`, {
+                method: "GET",
+                headers: {
+                    "Authorization": token ? `Bearer ${token}` : "" // 👈 ارسال توکن برای دریافت تاریخچه
+                }
+            });
             const dbData = await response.json();
             
             let realHistory = [];
@@ -133,7 +138,7 @@ export const useHealthStore = create((set, get) => ({
         userMetrics: { ...state.userMetrics, ...metrics }
     })),
 
-    runAssessment: async () => {
+    runAssessment: async (token) => { // 👈 توکن امنیتی اینجا دریافت می‌شود
         const { userMetrics, user } = get();
         const currentAge = calculateAge(user?.birthDate);
         const metricsWithAge = { ...userMetrics, age: currentAge };
@@ -159,7 +164,10 @@ export const useHealthStore = create((set, get) => ({
         try {
             const response = await fetch("https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/static", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: { 
+                    "Content-Type": "application/json",
+                    "Authorization": token ? `Bearer ${token}` : "" // 👈 ارسال توکن به عنوان هدر برای اندپونیت اصلی
+                },
                 body: JSON.stringify(payload)
             });
             
@@ -170,16 +178,14 @@ export const useHealthStore = create((set, get) => ({
             }
             
             const data = await response.json();
-
             const parsedScore = parseFloat(data.calculated_risk_score);
             
-            // تغییرات اصلی اینجاست: دریافت سن قلب و ApoB از بک‌اِند
             const result = {
                 riskScore: parsedScore,
                 riskCategory: data.risk_category,
-                heartAge: data.heart_age, // مستقیم از پایتون
-                apoB: data.estimated_apo_b, // مستقیم از پایتون
-                bmi: data.bmi, // مستقیم از پایتون
+                heartAge: data.heart_age, 
+                apoB: data.estimated_apo_b, 
+                bmi: data.bmi, 
                 recommendations: data.recommendations
             };
 

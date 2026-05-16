@@ -39,7 +39,7 @@ def run_security_test():
             # ۳. تست با دستکاری یک حرف در توکن واقعی (اگر توکن قبلی را داری اینجا بذار)
             headers = {
                 'Content-Type': 'application/json',
-                'Authorization': 'Bearer eyJraWQiOiJ2Wmd0TmRKUmNFV3FVQnRCUmUyZTc5NFRFUUVCN1grS1ZIUklhdkRCUklZPSIsI...' # توکن واقعی را ناقص بگذار
+                'Authorization': 'Bearer eyqraWQiOiJ2Wmd0TmRKUmNFV3FVQnRCUmUyZTc5NFRFUUVCN1grS1ZIUklhdkRCUklZPSIsI...' # توکن واقعی را ناقص بگذار
             }
 
         response = requests.post(URL, data=json.dumps(payload), headers=headers)

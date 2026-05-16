@@ -11,7 +11,17 @@ from datetime import datetime
 # --- 1. Database Configuration ---
 DATABASE_URL = "postgresql://wellbeat_admin:jodke5-qipqew-cokveQ@well-beat-db.cxm8ui4akb82.eu-south-1.rds.amazonaws.com:5432/wellbeatdb" 
 
-engine = create_engine(DATABASE_URL)
+# تنظیمات بهینه برای کاهش تاخیر در اولین اتصال
+engine = create_engine(
+    DATABASE_URL,
+    pool_size=1,           # در محیط سرورلس نیازی به استخر بزرگ نداریم
+    max_overflow=0,
+    pool_recycle=3600,
+    pool_pre_ping=True,    # قبل از استفاده سلامت اتصال را چک می‌کند
+    connect_args={
+        "connect_timeout": 5 # زمان انتظار برای اتصال را محدود می‌کند
+    }
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -66,14 +76,14 @@ def reset_database():
 # --- 3. Input Models (Updated for TRR) ---
 class RiskInputSchema(BaseModel):
     user_id: int
-    age: int
+    age: int = Field(..., ge=20, le=100) # سن بین ۱ تا ۱۲۰
     gender: str 
-    height: float
-    weight: float
+    height: float = Field(..., ge=50, le=250)
+    weight: float = Field(..., ge=11, le=300)
     smoker: bool
-    systolic_bp: int
-    ldl: int
-    hdl: int
+    systolic_bp: int = Field(..., ge=60, le=250) # فشار خون منطقی
+    ldl: int = Field(..., ge=10, le=500)
+    hdl: int = Field(..., ge=5, le=150)
     diabetes: bool
     family_history: bool
     arrhythmia: bool

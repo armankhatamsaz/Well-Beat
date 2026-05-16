@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Activity, Droplet, User, Calendar, Cigarette, AlertCircle, Wind, HeartPulse, Users } from 'lucide-react';
 import { useHealthStore } from '../store/useHealthStore';
+import { useAuth } from 'react-oidc-context'; // 👈 اضافه شدن هوک بادیگارد آمازون
 
 const AssessmentInputForm = () => {
+    const auth = useAuth(); // 👈 نمونه‌سازی برای استخراج توکن زنده کاربر
     const userMetrics = useHealthStore((state) => state.userMetrics);
     const setMetrics = useHealthStore((state) => state.setMetrics);
     const runAssessment = useHealthStore((state) => state.runAssessment);
@@ -28,12 +30,11 @@ const AssessmentInputForm = () => {
     });
 
     const handleChange = (field, value) => {
-        setError(""); // پاک کردن خطا هنگام تغییر ورودی
+        setError(""); 
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleCalculate = async () => {
-        // لایه اعتبارسنجی نهایی برای تست BVA (TRR Phase 1)
         if (formData.age < 20 || formData.age > 100) {
             setError("Age must be between 20 and 100.");
             return;
@@ -65,7 +66,10 @@ const AssessmentInputForm = () => {
 
         updateProfile({ birthDate: mockBirthDate, gender: formData.gender });
 
-        await runAssessment();
+        // 👈 استخراج آیدی توکن دریافتی از آمازون کوگنیتو بعد از ورود کاربر
+        const token = auth.user?.id_token;
+
+        await runAssessment(token); // 👈 ارسال توکن به تابع برای تزریق در هدر درخواست
         
         setIsLoading(false);
         setView('assessment');
@@ -137,7 +141,6 @@ const AssessmentInputForm = () => {
                     </div>
                 </div>
 
-                {/* بقیه فیلدها بدون تغییر باقی ماندند */}
                 <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700"><Cigarette size={18} className="text-slate-500" /> Smoker</label>
