@@ -33,7 +33,7 @@ const Layout = ({ children }) => {
         }
     }, [auth.isAuthenticated, user]);
 
-    // ۳. 🌟 تفکیک نام کاربری کاملاً داینامیک و چندکاربره در سطح رندر ظاهری (بدون آسیب به دیتابیس)
+    // ۳. 🌟 تفکیک نام کاربری کاملاً داینامیک و چندکاربره در سطح ردر ظاهری (بدون آسیب به دیتابیس)
     let displayDisplayName = 'User';
     if (user?.email) {
         const prefix = user.email.split('@')[0];
