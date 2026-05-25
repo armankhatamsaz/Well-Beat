@@ -11,31 +11,63 @@ const Layout = ({ children }) => {
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // ۱. 🌟 همان ترکیب برنده‌ای که تاریخچه و چارت‌ها را ۱۰۰٪ بدون نقص بالا می‌آورد (دست‌نخورده)
+    // ۱. 🌟 همان ترکیب برنده‌ای که تاریخچه و چارت‌ها را ۱۰۰٪ بدون نقص بالا می‌آورد
     useEffect(() => {
         if (auth.isAuthenticated && auth.user && !user) {
             loginStore({
                 name: auth.user.profile["cognito:username"] || auth.user.profile.email || 'User',
                 email: auth.user.profile.email,
-            }, auth.user.id_token); // ارسال دقیق پارامترها برای واکشی بدون نقص تاریخچه
+            }, auth.user.id_token); // واکشی دقیق تاریخچه دیتابیس بر اساس کلیم رسمی آمازون
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
-    // ۲. 🌟 استخراج کاملاً داینامیک نام واقعی از روی ایمیل کاربر برای رندر در هدر (بدون آسیب به دیتابیس)
-    let displayDisplayName = 'User';
-    const activeEmail = auth.user?.profile?.email || user?.email;
-    
-    if (activeEmail) {
-        const prefix = activeEmail.split('@')[0];
-        const cleanPrefix = prefix.split(/[\._-]/)[0];
-        displayDisplayName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // تبدیل arman به Arman
-    }
+    // ۲. 🌟 اصلاح هوشمند و داینامیک نام درون استور سراسری (Zustand State Patching)
+    // این بخش بدون آسیب زدن به دیتابیس، ارور گودمورنینگ و حروف پروفایل هدر را برطرف می‌کند
+    useEffect(() => {
+        if (user && user.name && user.name.includes('-') && user.name.length > 20) {
+            const activeEmail = user.email || auth.user?.profile?.email;
+            let cleanName = 'User';
+            
+            if (activeEmail) {
+                const prefix = activeEmail.split('@')[0];
+                const cleanPrefix = prefix.split(/[\._-]/)[0];
+                cleanName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // تبدیل arman به Arman
+            }
 
-    // ۳. 🌟 حل قطعی ارور ۴۰۰ لاگ‌اوت با خروج امن محلی و رفرش سشن برنامه
+            // تزریق مستقیم نام تمیز به کامپوننت‌های فرانت‌اِند (Dashboard و هدر)
+            useHealthStore.setState({
+                user: {
+                    ...user,
+                    name: cleanName
+                }
+            });
+        }
+    }, [user, auth.user]);
+
+    // ۳. 🌟 حل قطعی ارور رفرش صفحه مرورگر
+    useEffect(() => {
+        if (auth.isAuthenticated && user && !user.name.includes('-')) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('code') || url.searchParams.has('state')) {
+                url.searchParams.delete('code');
+                url.searchParams.delete('state');
+                window.history.replaceState({}, document.title, url.pathname + url.search);
+            }
+        }
+    }, [auth.isAuthenticated, user]);
+
+    // ۴. 🌟 حل قطعی ارور ۴۰۰ لاگ‌اوت آمازون کوگنیتو
     const handleLogout = () => {
-        logoutStore(); // پاک کردن استور سراسری
-        auth.removeUser(); // پاک کردن توکن‌های محلی
-        window.location.href = window.location.origin; // هدایت امن به صفحه لاگین بدون ارور آمازون
+        logoutStore(); // پاک کردن وضعیت محلی مرورگر
+        if (auth && auth.settings) {
+            const clientId = auth.settings.client_id;
+            // ارسال آدرس مبدا بدون اسلش مازاد برای تطابق ۱۰۰٪ با تنظیمات کلود شما
+            const logoutUrl = `https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(window.location.origin)}`;
+            auth.removeUser();
+            window.location.href = logoutUrl;
+        } else {
+            auth.removeUser();
+        }
     };
 
     return (
@@ -66,13 +98,12 @@ const Layout = ({ children }) => {
                                     >
                                         <img
                                             src={user.avatar}
-                                            alt={displayDisplayName}
+                                            alt={user.name}
                                             className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-slate-100 group-hover:border-medical-teal/30 transition-colors"
                                         />
                                         <div className="hidden md:block">
-                                            {/* 🌟 نمایش نام کاملاً داینامیک و تمیز شده */}
                                             <p className="text-sm font-bold text-slate-700 group-hover:text-medical-teal transition-colors">
-                                                {displayDisplayName}
+                                                {user.name}
                                             </p>
                                         </div>
                                     </button>
@@ -98,3 +129,5 @@ const Layout = ({ children }) => {
         </div>
     );
 };
+
+export default Layout; // 🌟 این همان خط حیاتی است که در پیام قبلی جا افتاده بود!
