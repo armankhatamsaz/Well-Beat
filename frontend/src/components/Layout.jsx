@@ -1,28 +1,45 @@
-import React, { useEffect } from 'react'; // 👈 اضافه کردن useEffect
+import React, { useEffect } from 'react';
 import { useHealthStore } from '../store/useHealthStore';
 import { LogOut, Flame, Activity } from 'lucide-react';
-import { useAuth } from 'react-oidc-context'; // اضافه شدن بادیگارد آمازون
-import GDPRBanner from './GDPRBanner'; // اضافه شدن پاپ‌آپ امنیتی
+import { useAuth } from 'react-oidc-context'; // بادیگارد آمازون
+import GDPRBanner from './GDPRBanner'; // پاپ‌آ‌پ امنیتی
 
 const Layout = ({ children }) => {
     const user = useHealthStore((state) => state.user);
-    const loginStore = useHealthStore((state) => state.login); // 👈 واکشی اکشن لاگین استور
+    const loginStore = useHealthStore((state) => state.login); // واکشی اکشن لاگین استور
     const logoutStore = useHealthStore((state) => state.logout);
     const setView = useHealthStore((state) => state.setView);
-    const auth = useAuth(); // فعال‌سازی هوک
+    const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // 🌟 قطعه کد جادویی همگام‌سازی کوگنیتو با دیتابیس AWS RDS
+    // 🌟 همگام‌سازی هوشمند اطلاعات کاربر و اصلاح نام کاربری از روی ایمیل یا پروفایل کوگنیتو
     useEffect(() => {
         if (auth.isAuthenticated && auth.user && !user) {
+            const profile = auth.user.profile;
+            
+            // ۱. تلاش برای خواندن نام یا نام کوچک از کلیم‌های آمازون
+            let displayName = profile.name || profile.given_name || profile.nickname;
+            
+            // ۲. اگر نامی ثبت نشده بود، بخش قبل از @ ایمیل را جدا کرده و تمیز می‌کند
+            if (!displayName && profile.email) {
+                const emailPrefix = profile.email.split('@')[0]; // جدا کردن پیشوند ایمیل
+                const cleanPrefix = emailPrefix.split(/[\._-]/)[0]; // حذف نقطه یا خط تیره در صورت وجود
+                displayName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // بزرگ کردن حرف اول
+            }
+            
+            // ۳. اگر هیچ‌کدام نبود، نام پیش‌فرض
+            if (!displayName) {
+                displayName = 'User';
+            }
+
             loginStore({
-                name: auth.user.profile["cognito:username"] || auth.user.profile.email || 'User',
-                email: auth.user.profile.email,
-            }, auth.user.id_token); // ارسال ایمیل و توکن به بک‌اِند برای واکشی تاریخچه واقعی
+                name: displayName, // 👈 نام تمیز و اصلاح شده ارسال می‌شود
+                email: profile.email,
+            }, auth.user.id_token); // ارسال توکن برای واکشی دیتای دیتابیس
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
     const handleLogout = () => {
-        logoutStore(); // ۱. پاک کردن دیتای داشبورد از روی مرورگر
+        logoutStore(); // ۱. پاک کردن دیتای حالت از روی مرورگر
         auth.removeUser(); // ۲. پاک کردن کلیدهای امنیتی آمازون
     };
 
@@ -79,9 +96,7 @@ const Layout = ({ children }) => {
                 {children}
             </main>
 
-            <header>
-                 <GDPRBanner />
-            </header>
+            <GDPRBanner />
         </div>
     );
 };
