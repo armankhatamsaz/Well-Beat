@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react'; // 👈 اضافه کردن useEffect
 import { useHealthStore } from '../store/useHealthStore';
 import { LogOut, Flame, Activity } from 'lucide-react';
 import { useAuth } from 'react-oidc-context'; // اضافه شدن بادیگارد آمازون
@@ -6,9 +6,20 @@ import GDPRBanner from './GDPRBanner'; // اضافه شدن پاپ‌آپ امن
 
 const Layout = ({ children }) => {
     const user = useHealthStore((state) => state.user);
+    const loginStore = useHealthStore((state) => state.login); // 👈 واکشی اکشن لاگین استور
     const logoutStore = useHealthStore((state) => state.logout);
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک
+
+    // 🌟 قطعه کد جادویی همگام‌سازی کوگنیتو با دیتابیس AWS RDS
+    useEffect(() => {
+        if (auth.isAuthenticated && auth.user && !user) {
+            loginStore({
+                name: auth.user.profile["cognito:username"] || auth.user.profile.email || 'User',
+                email: auth.user.profile.email,
+            }, auth.user.id_token); // ارسال ایمیل و توکن به بک‌اِند برای واکشی تاریخچه واقعی
+        }
+    }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
     const handleLogout = () => {
         logoutStore(); // ۱. پاک کردن دیتای داشبورد از روی مرورگر
@@ -51,7 +62,7 @@ const Layout = ({ children }) => {
                                         </div>
                                     </button>
                                     <button
-                                        onClick={handleLogout} // وصل شد به تابعِ خروجِ اصلی
+                                        onClick={handleLogout}
                                         className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all border border-transparent hover:border-rose-100"
                                         title="Sign Out"
                                     >
@@ -68,8 +79,9 @@ const Layout = ({ children }) => {
                 {children}
             </main>
 
-            {/* اجرای پاپ‌آپ در تمام صفحات */}
-            <GDPRBanner />
+            <header>
+                 <GDPRBanner />
+            </header>
         </div>
     );
 };
