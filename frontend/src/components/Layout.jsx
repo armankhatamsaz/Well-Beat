@@ -11,19 +11,9 @@ const Layout = ({ children }) => {
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // ۱. 🌟 همان ترکیب برنده‌ای که تاریخچه و چارت‌ها را ۱۰۰٪ بدون نقص بالا می‌آورد
+    // 🌟 ۱. حل قطعی ارور رفرش: پاک‌سازی آنی پارامترهای مخدوش‌کننده URL به محض تأیید احراز هویت
     useEffect(() => {
-        if (auth.isAuthenticated && auth.user && !user) {
-            loginStore({
-                name: auth.user.profile["cognito:username"] || auth.user.profile.email || 'User',
-                email: auth.user.profile.email,
-            }, auth.user.id_token); // ارسال دقیق پارامترها بدون کوچکترین تغییر
-        }
-    }, [auth.isAuthenticated, auth.user, user, loginStore]);
-
-    // ۲. 🌟 حل قطعی ارور رفرش: پاک‌سازی پارامترهای URL دقیقاً پس از لود موفق داده‌ها در استور
-    useEffect(() => {
-        if (auth.isAuthenticated && user) {
+        if (auth.isAuthenticated) {
             const url = new URL(window.location.href);
             if (url.searchParams.has('code') || url.searchParams.has('state')) {
                 url.searchParams.delete('code');
@@ -31,25 +21,36 @@ const Layout = ({ children }) => {
                 window.history.replaceState({}, document.title, url.pathname + url.search);
             }
         }
-    }, [auth.isAuthenticated, user]);
+    }, [auth.isAuthenticated]);
 
-    // ۳. 🌟 تفکیک نام کاربری کاملاً داینامیک و چندکاربره در سطح ردر ظاهری (بدون آسیب به دیتابیس)
-    let displayDisplayName = 'User';
-    if (user?.email) {
-        const prefix = user.email.split('@')[0];
-        const cleanPrefix = prefix.split(/[\._-]/)[0];
-        displayDisplayName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // جدا کردن اسم واقعی از ایمیل
-    } else if (user?.name && (!user.name.includes('-') || user.name.length < 20)) {
-        displayDisplayName = user.name;
-    }
+    // 🌟 ۲. همگام‌سازی داینامیک اطلاعات با دیتابیس AWS RDS (تضمین لود کامل تاریخچه و نام تمیز)
+    useEffect(() => {
+        if (auth.isAuthenticated && auth.user && !user) {
+            const userEmail = auth.user.profile.email;
+            
+            // استخراج خودکار و تمیز نام کاربری از روی پیشوند ایمیل برای تمام کاربران سیستم
+            let dynamicName = 'User';
+            if (userEmail) {
+                const prefix = userEmail.split('@')[0];
+                const cleanPrefix = prefix.split(/[\._-]/)[0];
+                dynamicName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // تبدیل arman به Arman
+            }
 
-    // ۴. 🌟 حل قطعی ارور ۴۰۰ لاگ‌اوت کوگنیتو و خروج کامل از سشن سرور آمازون
+            loginStore({
+                name: dynamicName, // تنظیم نام تمیز در استور برای حل باگ گودمورنینگ و اینیشیالز آیکون هدر
+                email: userEmail,   // ارسال دقیق ایمیل معتبر برای محاسبه صحیح هش دیتابیس و لود تاریخچه
+            }, auth.user.id_token); 
+        }
+    }, [auth.isAuthenticated, auth.user, user, loginStore]);
+
+    // 🌟 ۳. مدیریت خروج کامل و حل ارور ۴۰۰ آمازون کوگنیتو
     const handleLogout = () => {
         logoutStore(); // پاک کردن وضعیت محلی مرورگر
         if (auth && auth.settings) {
             const clientId = auth.settings.client_id;
-            // هدایت به لینک اختصاصی و هماهنگ شده با دپلووی کلود آمازون شما
-            const logoutUrl = `https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(window.location.origin)}`;
+            // اضافه کردن اسلش پایانی برای مچ شدن ۱...۱ با Sign-out URLs در کنسول آمازون کوگنیتو
+            const redirectUri = window.location.origin + '/';
+            const logoutUrl = `https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(redirectUri)}`;
             auth.removeUser();
             window.location.href = logoutUrl;
         } else {
@@ -85,12 +86,12 @@ const Layout = ({ children }) => {
                                     >
                                         <img
                                             src={user.avatar}
-                                            alt={displayDisplayName}
+                                            alt={user.name}
                                             className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-slate-100 group-hover:border-medical-teal/30 transition-colors"
                                         />
                                         <div className="hidden md:block">
                                             <p className="text-sm font-bold text-slate-700 group-hover:text-medical-teal transition-colors">
-                                                {displayDisplayName}
+                                                {user.name}
                                             </p>
                                         </div>
                                     </button>
