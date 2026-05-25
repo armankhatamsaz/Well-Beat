@@ -11,38 +11,50 @@ const Layout = ({ children }) => {
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // 🌟 استخراج کاملاً داینامیک نام برای تمامی کاربران سیستم
+    // 🌟 همگام‌سازی کاربر + حل مشکل ارور رفرش (Wipe Out Query Parameters)
     useEffect(() => {
-        if (auth.isAuthenticated && auth.user && !user) {
-            const profile = auth.user.profile;
-            const userEmail = profile.email;
+        if (auth.isAuthenticated && auth.user) {
             
-            // ۱. ابتدا تلاش برای خواندن نام واقعی از فیلدهای رسمی Cognito
-            let dynamicName = profile.name || profile.given_name || profile.nickname || profile.preferred_username;
-            
-            // ۲. اگر فیلدهای بالا خالی بودند، پیشوند ایمیل هر کاربری را به عنوان اسم ست کن (حرف اول بزرگ)
-            if (!dynamicName && userEmail) {
-                const prefix = userEmail.split('@')[0]; // جدا کردن قبل از @
-                const cleanPrefix = prefix.split(/[\._-]/)[0]; // حذف نقطه، خط تیره یا آندرلاین
-                dynamicName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // بزرگ کردن حرف اول اسم
-            }
-            
-            // ۳. دکمه اطمینان نهایی
-            if (!dynamicName) {
-                dynamicName = 'User';
+            // ✅ حل قطعی ارور رفرش: به محض لاگین موفق، پارامترهای ?code= ته URL را پاک می‌کند
+            if (window.location.search.includes('code=') || window.location.search.includes('state=')) {
+                window.history.replaceState({}, document.title, window.location.pathname);
             }
 
-            // ارسال ایمیل اصلی بدون دست‌کاری به دیتابیس (تضمین پایداری تاریخچه)
-            loginStore({
-                name: dynamicName, 
-                email: userEmail,   
-            }, auth.user.id_token); 
+            if (!user) {
+                const profile = auth.user.profile;
+                const userEmail = profile.email;
+                
+                // استخراج داینامیک نام
+                let dynamicName = profile.name || profile.given_name || profile.nickname || profile.preferred_username;
+                
+                if (!dynamicName && userEmail) {
+                    const prefix = userEmail.split('@')[0];
+                    const cleanPrefix = prefix.split(/[\._-]/)[0];
+                    dynamicName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1);
+                }
+                
+                if (!dynamicName) {
+                    dynamicName = 'User';
+                }
+
+                loginStore({
+                    name: dynamicName, 
+                    email: userEmail,   
+                }, auth.user.id_token); 
+            }
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
+    // 🌟 حل مشکل لوپ لاگ‌اوت (Complete Federated Logout)
     const handleLogout = () => {
-        logoutStore(); 
-        auth.removeUser(); 
+        logoutStore(); // ۱. پاک کردن دیتای استور از روی مرورگر
+        
+        // ۲. خروج کامل و هدایت به صفحه لاگ‌اوت کلود آمازون برای از بین بردن کوکی سشن
+        if (auth && auth.signoutRedirect) {
+            auth.signoutRedirect(); 
+        } else {
+            auth.removeUser();
+        }
     };
 
     return (
