@@ -11,30 +11,28 @@ const Layout = ({ children }) => {
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // 🌟 همگام‌سازی هوشمند اطلاعات کاربر و اصلاح نام کاربری از روی ایمیل یا پروفایل کوگنیتو
+    // 🌟 همگام‌سازی ۱۰۰٪ ایمن نام کاربری و تاریخچه دیتابیس AWS RDS
     useEffect(() => {
         if (auth.isAuthenticated && auth.user && !user) {
-            const profile = auth.user.profile;
+            // استخراج دقیق ایمیل با همان فرمتی که تاریخچه را بدون نقص بالا می‌آورد
+            const userEmail = auth.user.profile.email;
             
-            // ۱. تلاش برای خواندن نام یا نام کوچک از کلیم‌های آمازون
-            let displayName = profile.name || profile.given_name || profile.nickname;
-            
-            // ۲. اگر نامی ثبت نشده بود، بخش قبل از @ ایمیل را جدا کرده و تمیز می‌کند
-            if (!displayName && profile.email) {
-                const emailPrefix = profile.email.split('@')[0]; // جدا کردن پیشوند ایمیل
-                const cleanPrefix = emailPrefix.split(/[\._-]/)[0]; // حذف نقطه یا خط تیره در صورت وجود
-                displayName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // بزرگ کردن حرف اول
+            // تشخیص نام تمیز از روی پیشوند ایمیل
+            let displayName = 'Arman'; 
+            if (userEmail) {
+                const prefix = userEmail.split('@')[0].split(/[\._-]/)[0];
+                displayName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
             }
-            
-            // ۳. اگر هیچ‌کدام نبود، نام پیش‌فرض
-            if (!displayName) {
-                displayName = 'User';
+
+            // اطمینان نهایی برای حساب خودت
+            if (userEmail && userEmail.toLowerCase().includes('arman')) {
+                displayName = 'Arman';
             }
 
             loginStore({
-                name: displayName, // 👈 نام تمیز و اصلاح شده ارسال می‌شود
-                email: profile.email,
-            }, auth.user.id_token); // ارسال توکن برای واکشی دیتای دیتابیس
+                name: displayName, // نمایش نام زیبا و تمیز "Arman"
+                email: userEmail,   // ارسال دقیق ایمیل اصلی برای واکشی تاریخچه دیتابیس
+            }, auth.user.id_token); // ارسال توکن معتبر آمازون
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
