@@ -30,6 +30,16 @@ const CalendarView = () => {
         }
     };
 
+    // 🌟 تابع رفتن به ماه قبل
+    const handlePrevMonth = () => {
+        setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+    };
+
+    // 🌟 تابع رفتن به ماه بعد
+    const handleNextMonth = () => {
+        setCurrentDate(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
+    };
+
     return (
         <div className="p-6 bg-white rounded-3xl shadow-sm border border-slate-100 h-full relative overflow-hidden">
             <div className="flex items-center justify-between mb-6">
@@ -37,12 +47,26 @@ const CalendarView = () => {
                     <CalendarIcon size={20} className="text-blue-500" />
                     History
                 </h3>
-                <div className="flex gap-2">
-                    <button className="p-1 hover:bg-slate-100 rounded-full"><ChevronLeft size={20} /></button>
-                    <span className="text-sm font-medium text-slate-600">
+                <div className="flex gap-2 items-center">
+                    {/* اتصال دکمه رفتن به ماه قبل 👈 */}
+                    <button 
+                        onClick={handlePrevMonth} 
+                        className="p-1 hover:bg-slate-100 rounded-full transition-colors"
+                    >
+                        <ChevronLeft size={20} />
+                    </button>
+                    
+                    <span className="text-sm font-medium text-slate-600 min-w-[100px] text-center">
                         {currentDate.toLocaleString('default', { month: 'long', year: 'numeric' })}
                     </span>
-                    <button className="p-1 hover:bg-slate-100 rounded-full"><ChevronRight size={20} /></button>
+                    
+                    {/* اتصال دکمه رفتن به ماه بعد 👈 */}
+                    <button 
+                        onClick={handleNextMonth} 
+                        className="p-1 hover:bg-slate-100 rounded-full transition-colors"
+                    >
+                        <ChevronRight size={20} />
+                    </button>
                 </div>
             </div>
 
