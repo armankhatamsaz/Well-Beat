@@ -11,34 +11,38 @@ const Layout = ({ children }) => {
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // 🌟 همگام‌سازی ۱۰۰٪ ایمن نام کاربری و تاریخچه دیتابیس AWS RDS
+    // 🌟 استخراج کاملاً داینامیک نام برای تمامی کاربران سیستم
     useEffect(() => {
         if (auth.isAuthenticated && auth.user && !user) {
-            // استخراج دقیق ایمیل با همان فرمتی که تاریخچه را بدون نقص بالا می‌آورد
-            const userEmail = auth.user.profile.email;
+            const profile = auth.user.profile;
+            const userEmail = profile.email;
             
-            // تشخیص نام تمیز از روی پیشوند ایمیل
-            let displayName = 'Arman'; 
-            if (userEmail) {
-                const prefix = userEmail.split('@')[0].split(/[\._-]/)[0];
-                displayName = prefix.charAt(0).toUpperCase() + prefix.slice(1);
+            // ۱. ابتدا تلاش برای خواندن نام واقعی از فیلدهای رسمی Cognito
+            let dynamicName = profile.name || profile.given_name || profile.nickname || profile.preferred_username;
+            
+            // ۲. اگر فیلدهای بالا خالی بودند، پیشوند ایمیل هر کاربری را به عنوان اسم ست کن (حرف اول بزرگ)
+            if (!dynamicName && userEmail) {
+                const prefix = userEmail.split('@')[0]; // جدا کردن قبل از @
+                const cleanPrefix = prefix.split(/[\._-]/)[0]; // حذف نقطه، خط تیره یا آندرلاین
+                dynamicName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // بزرگ کردن حرف اول اسم
+            }
+            
+            // ۳. دکمه اطمینان نهایی
+            if (!dynamicName) {
+                dynamicName = 'User';
             }
 
-            // اطمینان نهایی برای حساب خودت
-            if (userEmail && userEmail.toLowerCase().includes('arman')) {
-                displayName = 'Arman';
-            }
-
+            // ارسال ایمیل اصلی بدون دست‌کاری به دیتابیس (تضمین پایداری تاریخچه)
             loginStore({
-                name: displayName, // نمایش نام زیبا و تمیز "Arman"
-                email: userEmail,   // ارسال دقیق ایمیل اصلی برای واکشی تاریخچه دیتابیس
-            }, auth.user.id_token); // ارسال توکن معتبر آمازون
+                name: dynamicName, 
+                email: userEmail,   
+            }, auth.user.id_token); 
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
     const handleLogout = () => {
-        logoutStore(); // ۱. پاک کردن دیتای حالت از روی مرورگر
-        auth.removeUser(); // ۲. پاک کردن کلیدهای امنیتی آمازون
+        logoutStore(); 
+        auth.removeUser(); 
     };
 
     return (
@@ -73,7 +77,9 @@ const Layout = ({ children }) => {
                                             className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-slate-100 group-hover:border-medical-teal/30 transition-colors"
                                         />
                                         <div className="hidden md:block">
-                                            <p className="text-sm font-bold text-slate-700 group-hover:text-medical-teal transition-colors">{user.name}</p>
+                                            <p className="text-sm font-bold text-slate-700 group-hover:text-medical-teal transition-colors">
+                                                {user.name}
+                                            </p>
                                         </div>
                                     </button>
                                     <button
