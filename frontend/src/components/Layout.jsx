@@ -11,47 +11,47 @@ const Layout = ({ children }) => {
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // 🌟 همگام‌سازی کاربر + حل مشکل ارور رفرش (Wipe Out Query Parameters)
+    // ۱. 🌟 همان ترکیب برنده‌ای که تاریخچه و چارت‌ها را ۱۰۰٪ بدون نقص بالا می‌آورد
     useEffect(() => {
-        if (auth.isAuthenticated && auth.user) {
-            
-            // ✅ حل قطعی ارور رفرش: به محض لاگین موفق، پارامترهای ?code= ته URL را پاک می‌کند
-            if (window.location.search.includes('code=') || window.location.search.includes('state=')) {
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-
-            if (!user) {
-                const profile = auth.user.profile;
-                const userEmail = profile.email;
-                
-                // استخراج داینامیک نام
-                let dynamicName = profile.name || profile.given_name || profile.nickname || profile.preferred_username;
-                
-                if (!dynamicName && userEmail) {
-                    const prefix = userEmail.split('@')[0];
-                    const cleanPrefix = prefix.split(/[\._-]/)[0];
-                    dynamicName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1);
-                }
-                
-                if (!dynamicName) {
-                    dynamicName = 'User';
-                }
-
-                loginStore({
-                    name: dynamicName, 
-                    email: userEmail,   
-                }, auth.user.id_token); 
-            }
+        if (auth.isAuthenticated && auth.user && !user) {
+            loginStore({
+                name: auth.user.profile["cognito:username"] || auth.user.profile.email || 'User',
+                email: auth.user.profile.email,
+            }, auth.user.id_token); // ارسال دقیق پارامترها بدون کوچکترین تغییر
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
-    // 🌟 حل مشکل لوپ لاگ‌اوت (Complete Federated Logout)
+    // ۲. 🌟 حل قطعی ارور رفرش: پاک‌سازی پارامترهای URL دقیقاً پس از لود موفق داده‌ها در استور
+    useEffect(() => {
+        if (auth.isAuthenticated && user) {
+            const url = new URL(window.location.href);
+            if (url.searchParams.has('code') || url.searchParams.has('state')) {
+                url.searchParams.delete('code');
+                url.searchParams.delete('state');
+                window.history.replaceState({}, document.title, url.pathname + url.search);
+            }
+        }
+    }, [auth.isAuthenticated, user]);
+
+    // ۳. 🌟 تفکیک نام کاربری کاملاً داینامیک و چندکاربره در سطح رندر ظاهری (بدون آسیب به دیتابیس)
+    let displayDisplayName = 'User';
+    if (user?.email) {
+        const prefix = user.email.split('@')[0];
+        const cleanPrefix = prefix.split(/[\._-]/)[0];
+        displayDisplayName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // جدا کردن اسم واقعی از ایمیل
+    } else if (user?.name && (!user.name.includes('-') || user.name.length < 20)) {
+        displayDisplayName = user.name;
+    }
+
+    // ۴. 🌟 حل قطعی ارور ۴۰۰ لاگ‌اوت کوگنیتو و خروج کامل از سشن سرور آمازون
     const handleLogout = () => {
-        logoutStore(); // ۱. پاک کردن دیتای استور از روی مرورگر
-        
-        // ۲. خروج کامل و هدایت به صفحه لاگ‌اوت کلود آمازون برای از بین بردن کوکی سشن
-        if (auth && auth.signoutRedirect) {
-            auth.signoutRedirect(); 
+        logoutStore(); // پاک کردن وضعیت محلی مرورگر
+        if (auth && auth.settings) {
+            const clientId = auth.settings.client_id;
+            // هدایت به لینک اختصاصی و هماهنگ شده با دپلووی کلود آمازون شما
+            const logoutUrl = `https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com/logout?client_id=${clientId}&logout_uri=${encodeURIComponent(window.location.origin)}`;
+            auth.removeUser();
+            window.location.href = logoutUrl;
         } else {
             auth.removeUser();
         }
@@ -85,12 +85,12 @@ const Layout = ({ children }) => {
                                     >
                                         <img
                                             src={user.avatar}
-                                            alt={user.name}
+                                            alt={displayDisplayName}
                                             className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-slate-100 group-hover:border-medical-teal/30 transition-colors"
                                         />
                                         <div className="hidden md:block">
                                             <p className="text-sm font-bold text-slate-700 group-hover:text-medical-teal transition-colors">
-                                                {user.name}
+                                                {displayDisplayName}
                                             </p>
                                         </div>
                                     </button>
