@@ -1,3 +1,5 @@
+// Layout.jsx
+
 import React, { useEffect } from 'react';
 import { useHealthStore } from '../store/useHealthStore';
 import { LogOut, Flame, Activity } from 'lucide-react';
@@ -6,37 +8,48 @@ import GDPRBanner from './GDPRBanner'; // پاپ‌آ‌پ امنیتی
 
 const Layout = ({ children }) => {
     const user = useHealthStore((state) => state.user);
-    const loginStore = useHealthStore((state) => state.login); // واکشی اکشن لاگین استور
+    const loginStore = useHealthStore((state) => state.login);
     const logoutStore = useHealthStore((state) => state.logout);
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
 
-    // ۱. 🌟 همان ترکیب برنده و اصلی که تاریخچه و چارت‌ها را ۱۰۰٪ کامل و بدون نقص بالا می‌آورد
     useEffect(() => {
+        // اجرا شدن فقط در صورتی که کاربر از سمت آمازون تایید شده باشه
         if (auth.isAuthenticated && auth.user && !user) {
+            
+            // ۱. استخراج هوشمند و داینامیک نام واقعی (بدون هاردکد کردن هیچ اسمی)
+            let finalName = 'User';
+            const profile = auth.user.profile;
+
+            if (profile.name) {
+                finalName = profile.name;
+            } else if (profile.given_name) {
+                finalName = profile.given_name;
+            } else if (profile.email) {
+                // اگر کاربر هیچ اسمی وارد نکرده بود، از قسمت اول ایمیلش استفاده می‌کنیم
+                const prefix = profile.email.split('@')[0];
+                const cleanPrefix = prefix.split(/[\._-]/)[0];
+                finalName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1);
+            }
+
+            // ارسال توکن و نام صحیح به استور برای دریافت قطعی تاریخچه
             loginStore({
-                name: auth.user.profile["cognito:username"] || auth.user.profile.email || 'User',
-                email: auth.user.profile.email,
-            }, auth.user.id_token); // واکشی تاریخچه واقعی بر اساس سشن پایدار
+                name: finalName,
+                email: profile.email,
+            }, auth.user.id_token); 
         }
     }, [auth.isAuthenticated, auth.user, user, loginStore]);
 
-    // ۲. 🌟 استخراج کاملاً داینامیک نام واقعی فقط برای رندر در هدر (بدون هیچ دست‌کاری در استور یا دیتابیس)
-    let displayDisplayName = 'User';
-    const activeEmail = auth.user?.profile?.email || user?.email;
-    
-    if (activeEmail) {
-        const prefix = activeEmail.split('@')[0];
-        const cleanPrefix = prefix.split(/[\._-]/)[0];
-        displayDisplayName = cleanPrefix.charAt(0).toUpperCase() + cleanPrefix.slice(1); // تبدیل arman به Arman
-    }
-
-    // ۳. 🌟 خروج محلی کاملاً امن، تمیز و بدون ارور ۴۰۰ آمازون
+    // ۲. حل مشکل لاگ‌اوت ناقص
     const handleLogout = () => {
-        logoutStore(); // پاک کردن استور محلی
-        auth.removeUser(); // پاک کردن توکن‌های آمازون از روی مرورگر
-        window.location.href = window.location.origin; // هدایت مستقیم به صفحه خانه
+        logoutStore(); // پاک کردن استیت از روی مرورگر
+        auth.signoutRedirect(); // 👈 هدایت به اندپوینت خروج آمازون برای ابطال کامل کوکی‌ها (نیاز به ورود مجدد)
     };
+
+    const displayDisplayName = user?.name || 'User';
+    
+    // ۳. گرفتن خودکار دو حرف اول اسم کاربر برای آواتار
+    const avatarInitials = displayDisplayName.substring(0, 2).toUpperCase();
 
     return (
         <div className="min-h-screen bg-soft-surface text-slate-900 font-sans selection:bg-medical-teal/20 selection:text-medical-teal">
@@ -64,13 +77,12 @@ const Layout = ({ children }) => {
                                         onClick={() => setView('profile')}
                                         className="flex items-center gap-3 hover:bg-slate-50 p-1.5 pr-3 rounded-xl transition-all text-left group border border-transparent hover:border-slate-200"
                                     >
-                                        <img
-                                            src={user.avatar}
-                                            alt={displayDisplayName}
-                                            className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-slate-100 group-hover:border-medical-teal/30 transition-colors"
-                                        />
+                                        {/* دایره آواتار با نمایش دو حرف اول اسم */}
+                                        <div className="w-9 h-9 rounded-full border-2 border-white shadow-sm bg-gradient-to-br from-slate-700 to-slate-900 flex items-center justify-center text-white font-bold text-sm group-hover:border-medical-teal/50 transition-colors">
+                                            {avatarInitials}
+                                        </div>
+
                                         <div className="hidden md:block">
-                                            {/* 🌟 رندر کاملاً تمیز نام کاربری */}
                                             <p className="text-sm font-bold text-slate-700 group-hover:text-medical-teal transition-colors">
                                                 {displayDisplayName}
                                             </p>
