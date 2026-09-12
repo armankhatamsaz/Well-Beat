@@ -1,0 +1,54 @@
+{
+  "permissions": {
+    "deny": [
+      "Bash(aws * delete-*)",
+      "Bash(aws * terminate-*)",
+      "Bash(aws rds delete-db-instance:*)",
+      "Bash(aws rds reboot-db-instance:*)",
+      "Bash(aws s3 rb:*)",
+      "Bash(aws s3 rm:*)",
+      "Bash(aws iam:*)",
+      "Bash(terraform destroy:*)",
+      "Bash(sam delete:*)",
+      "Bash(serverless remove:*)",
+      "Bash(cdk destroy:*)",
+      "Bash(rm -rf:*)",
+      "Bash(git push --force:*)",
+      "Bash(git reset --hard:*)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/secrets/**)",
+      "Bash(cat .env*)"
+    ],
+    "ask": [
+      "Bash(aws lambda update-*)",
+      "Bash(aws apigateway:*)",
+      "Bash(aws rds modify-*)",
+      "Bash(aws rds start-db-instance:*)",
+      "Bash(aws ec2 authorize-*)",
+      "Bash(aws ec2 revoke-*)",
+      "Bash(aws budgets:*)",
+      "Bash(sam deploy:*)",
+      "Bash(serverless deploy:*)",
+      "Bash(terraform apply:*)",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(psql:*)"
+    ],
+    "allow": [
+      "Bash(aws sts get-caller-identity)",
+      "Bash(aws * describe-*)",
+      "Bash(aws * list-*)",
+      "Bash(aws * get-*)",
+      "Bash(aws logs tail:*)",
+      "Bash(aws logs filter-log-events:*)",
+      "Bash(curl -i:*)",
+      "Bash(git status:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(npm run build:*)",
+      "Bash(npm run test:*)",
+      "Bash(python -m pytest:*)"
+    ]
+  }
+}

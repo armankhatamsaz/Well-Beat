@@ -2,8 +2,39 @@ import time
 import statistics
 from sqlalchemy import create_engine, text
 
-# آدرس دیتابیس شما
-DB_URL = "postgresql://wellbeat_admin:jodke5-qipqew-cokveQ@well-beat-db.cxm8ui4akb82.eu-south-1.rds.amazonaws.com:5432/wellbeatdb"
+# Connection details come from environment variables. Set DB_HOST, DB_NAME,
+# DB_USER and DB_PASSWORD in your shell before running this script. The old
+# hardcoded credential that lived on this line was exposed and has been rotated;
+# never write a password back into this file.
+#
+# WARNING: this script writes synthetic rows into the live risk_results table.
+# Point it at a scratch database, or be prepared to clean up the user_id range
+# it uses afterwards.
+def _dsn():
+    import os
+    from urllib.parse import quote_plus
+    missing = [v for v in ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD")
+               if not os.environ.get(v, "").strip()]
+    if missing:
+        raise SystemExit(
+            "Configuration error: missing environment variable(s): "
+            + ", ".join(missing)
+        )
+    return (
+        "postgresql://"
+        + quote_plus(os.environ["DB_USER"])
+        + ":"
+        + quote_plus(os.environ["DB_PASSWORD"])
+        + "@"
+        + os.environ["DB_HOST"]
+        + ":"
+        + os.environ.get("DB_PORT", "5432")
+        + "/"
+        + os.environ["DB_NAME"]
+    )
+
+
+DB_URL = _dsn()
 engine = create_engine(DB_URL)
 
 def measure_latency():

@@ -1,0 +1,59 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "BlockDestructiveActions",
+      "Effect": "Deny",
+      "Action": [
+        "rds:DeleteDBInstance",
+        "rds:DeleteDBCluster",
+        "rds:DeleteDBSnapshot",
+        "rds:DeleteDBSubnetGroup",
+        "lambda:DeleteFunction",
+        "apigateway:DELETE",
+        "cognito-idp:DeleteUserPool",
+        "cognito-idp:DeleteUserPoolClient",
+        "s3:DeleteBucket",
+        "cloudfront:DeleteDistribution",
+        "ec2:TerminateInstances",
+        "ec2:DeleteVpc",
+        "ec2:DeleteSubnet",
+        "cloudformation:DeleteStack",
+        "kms:ScheduleKeyDeletion",
+        "kms:DisableKey",
+        "logs:DeleteLogGroup",
+        "secretsmanager:DeleteSecret"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BlockIdentityAndBillingChanges",
+      "Effect": "Deny",
+      "Action": [
+        "iam:Create*",
+        "iam:Delete*",
+        "iam:Attach*",
+        "iam:Detach*",
+        "iam:Put*",
+        "iam:Update*",
+        "organizations:*",
+        "account:*",
+        "aws-portal:Modify*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "BlockExpensiveResourceCreation",
+      "Effect": "Deny",
+      "Action": [
+        "ec2:CreateNatGateway",
+        "ec2:RunInstances",
+        "rds:CreateDBInstance",
+        "rds:CreateDBCluster",
+        "elasticache:CreateCacheCluster",
+        "sagemaker:CreateEndpoint"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

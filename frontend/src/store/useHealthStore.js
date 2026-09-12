@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { validateRiskInput, invalidFieldNames } from '../utils/validation';
 
 // Helper function to calculate streak
 const calculateStreak = (history) => {
@@ -160,6 +161,20 @@ export const useHealthStore = create((set, get) => ({
             arrhythmia: metricsWithAge.arrhythmia || false,
             high_pollution_exposure: metricsWithAge.high_pollution_exposure || false
         };
+
+        // Second validation gate. The form checks its own fields, but this is the
+        // single place every assessment request passes through, so the guarantee
+        // that only plausible data reaches the API is enforced here. The server
+        // still validates independently; this does not replace it.
+        const validation = validateRiskInput(payload);
+        if (!validation.success) {
+            // Field names only. The values are health data and must never be logged.
+            console.error(
+                "Assessment blocked by client-side validation. Invalid fields:",
+                invalidFieldNames(validation.fieldErrors).join(", ")
+            );
+            return;
+        }
 
         try {
             const response = await fetch("https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/static", {

@@ -3,6 +3,11 @@ import { motion } from 'framer-motion';
 import { Activity, Droplet, User, Calendar, Cigarette, AlertCircle, Wind, HeartPulse, Users } from 'lucide-react';
 import { useHealthStore } from '../store/useHealthStore';
 import { useAuth } from 'react-oidc-context'; // 👈 اضافه شدن هوک بادیگارد آمازون
+import { validateRiskForm } from '../utils/validation';
+
+const FieldError = ({ message }) => (
+    message ? <p className="text-xs font-medium text-rose-600">{message}</p> : null
+);
 
 const AssessmentInputForm = () => {
     const auth = useAuth(); // 👈 نمونه‌سازی برای استخراج توکن زنده کاربر
@@ -13,6 +18,7 @@ const AssessmentInputForm = () => {
     const updateProfile = useHealthStore((state) => state.updateProfile);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState("");
+    const [fieldErrors, setFieldErrors] = useState({});
 
     const [formData, setFormData] = useState({
         age: userMetrics.age || 45,
@@ -31,40 +37,65 @@ const AssessmentInputForm = () => {
 
     const handleChange = (field, value) => {
         setError(""); 
+        setFieldErrors(prev => {
+            if (prev[field] === undefined) return prev;
+            const next = { ...prev };
+            delete next[field];
+            return next;
+        });
         setFormData(prev => ({ ...prev, [field]: value }));
     };
 
     const handleCalculate = async () => {
-        if (formData.age < 20 || formData.age > 100) {
-            setError("Age must be between 20 and 100.");
-            return;
-        }
-        if (formData.ldl < 10 || formData.ldl > 400 || formData.hdl < 10 || formData.hdl > 150) {
-            setError("Lipid values are out of physiological range.");
+        const asBool = (v) => v === 'true' || v === true;
+
+        // Shape the form state into exactly what the API expects, then check it
+        // against the Zod schema, which mirrors the server's Pydantic bounds.
+        const candidate = {
+            age: Number(formData.age),
+            gender: formData.gender,
+            height: Number(formData.height),
+            weight: Number(formData.weight),
+            smoker: asBool(formData.smoker),
+            systolic_bp: Number(formData.sbp),
+            ldl: Number(formData.ldl),
+            hdl: Number(formData.hdl),
+            diabetes: asBool(formData.diabetes),
+            family_history: asBool(formData.familyHistory),
+            arrhythmia: asBool(formData.arrhythmia),
+            high_pollution_exposure: asBool(formData.highPollution)
+        };
+
+        const validation = validateRiskForm(candidate);
+        if (!validation.success) {
+            setError("");
+            setFieldErrors(validation.formErrors);
             return;
         }
 
+        setError("");
+        setFieldErrors({});
         setIsLoading(true);
         setMetrics({
-            age: Number(formData.age),
-            gender: formData.gender,
-            sbp: Number(formData.sbp),
-            smoker: formData.smoker === 'true' || formData.smoker === true,
-            ldl: Number(formData.ldl),
-            hdl: Number(formData.hdl),
-            diabetes: formData.diabetes === 'true' || formData.diabetes === true,
-            familyHistory: formData.familyHistory === 'true' || formData.familyHistory === true,
-            height: Number(formData.height),
-            weight: Number(formData.weight),
-            arrhythmia: formData.arrhythmia === 'true' || formData.arrhythmia === true,
-            high_pollution_exposure: formData.highPollution === 'true' || formData.highPollution === true
+            age: candidate.age,
+            gender: candidate.gender,
+            sbp: candidate.systolic_bp,
+            smoker: candidate.smoker,
+            ldl: candidate.ldl,
+            hdl: candidate.hdl,
+            diabetes: candidate.diabetes,
+            familyHistory: candidate.family_history,
+            height: candidate.height,
+            weight: candidate.weight,
+            arrhythmia: candidate.arrhythmia,
+            high_pollution_exposure: candidate.high_pollution_exposure
         });
 
         const currentYear = new Date().getFullYear();
-        const birthYear = currentYear - Number(formData.age);
+        const birthYear = currentYear - candidate.age;
         const mockBirthDate = `${birthYear}-01-01`;
 
-        updateProfile({ birthDate: mockBirthDate, gender: formData.gender });
+        updateProfile({ birthDate: mockBirthDate, gender: candidate.gender });
 
         // 👈 استخراج آیدی توکن دریافتی از آمازون کوگنیتو بعد از ورود کاربر
         const token = auth.user?.id_token;
@@ -92,6 +123,7 @@ const AssessmentInputForm = () => {
                             <Calendar size={18} className="text-slate-500" /> Age
                         </label>
                         <input type="number" min="20" max="100" value={formData.age} onChange={(e) => handleChange('age', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
+                        <FieldError message={fieldErrors.age} />
                     </div>
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
@@ -101,18 +133,21 @@ const AssessmentInputForm = () => {
                             <option value="male">Male</option>
                             <option value="female">Female</option>
                         </select>
+                        <FieldError message={fieldErrors.gender} />
                     </div>
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                             Height (cm)
                         </label>
                         <input type="number" value={formData.height} onChange={(e) => handleChange('height', e.target.value)} min="50" max="250" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
+                        <FieldError message={fieldErrors.height} />
                     </div>
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                             Weight (kg)
                         </label>
                         <input type="number" value={formData.weight} onChange={(e) => handleChange('weight', e.target.value)} min="20" max="300" className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-500 outline-none font-medium" />
+                        <FieldError message={fieldErrors.weight} />
                     </div>
                 </div>
 
@@ -124,6 +159,7 @@ const AssessmentInputForm = () => {
                         <input type="range" min="80" max="250" value={formData.sbp} onChange={(e) => handleChange('sbp', e.target.value)} className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-rose-500" />
                         <div className="w-16 p-2 bg-slate-50 border border-slate-200 rounded-xl text-center font-bold text-slate-900">{formData.sbp}</div>
                     </div>
+                    <FieldError message={fieldErrors.sbp} />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
@@ -132,12 +168,14 @@ const AssessmentInputForm = () => {
                             <Droplet size={18} className="text-amber-500" /> LDL Chol.
                         </label>
                         <input type="number" min="10" max="400" value={formData.ldl} onChange={(e) => handleChange('ldl', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none font-medium" />
+                        <FieldError message={fieldErrors.ldl} />
                     </div>
                     <div className="space-y-3">
                         <label className="flex items-center gap-2 text-sm font-bold text-slate-700">
                             <Droplet size={18} className="text-emerald-500" /> HDL Chol.
                         </label>
                         <input type="number" min="10" max="150" value={formData.hdl} onChange={(e) => handleChange('hdl', e.target.value)} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none font-medium" />
+                        <FieldError message={fieldErrors.hdl} />
                     </div>
                 </div>
 

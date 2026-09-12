@@ -6,20 +6,77 @@ from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, Field
 from mangum import Mangum
 import math
+import os
+from urllib.parse import quote_plus
 from datetime import datetime
 
 # --- 1. Database Configuration ---
-DATABASE_URL = "postgresql://wellbeat_admin:jodke5-qipqew-cokveQ@well-beat-db.cxm8ui4akb82.eu-south-1.rds.amazonaws.com:5432/wellbeatdb" 
+# Every connection detail is supplied by Lambda environment variables.
+# Nothing about the database is hardcoded here: no host, no user, no password.
+REQUIRED_DB_VARS = ("DB_HOST", "DB_NAME", "DB_USER", "DB_PASSWORD")
 
-# تنظیمات بهینه برای کاهش تاخیر در اولین اتصال
+
+def _require_env(name):
+    """Return a required environment variable, or fail with a non-secret message."""
+    value = os.environ.get(name, "").strip()
+    if not value:
+        raise RuntimeError(
+            "Configuration error: required environment variable "
+            + name
+            + " is not set. This function needs "
+            + ", ".join(REQUIRED_DB_VARS)
+            + " (and optionally DB_PORT, which defaults to 5432) to be configured "
+            "on the Lambda function. No value is shown here on purpose."
+        )
+    return value
+
+
+def _build_database_url():
+    """Assemble the SQLAlchemy DSN. The result is never logged or returned to a client."""
+    user = _require_env("DB_USER")
+    password = _require_env("DB_PASSWORD")
+    host = _require_env("DB_HOST")
+    name = _require_env("DB_NAME")
+    port = os.environ.get("DB_PORT", "5432").strip() or "5432"
+    # quote_plus stops a password containing URL-reserved characters from
+    # corrupting the DSN.
+    return (
+        "postgresql://"
+        + quote_plus(user)
+        + ":"
+        + quote_plus(password)
+        + "@"
+        + host
+        + ":"
+        + port
+        + "/"
+        + name
+    )
+
+
+DATABASE_URL = _build_database_url()
+
+# Pool sizing for AWS Lambda. One execution environment serves one request at a
+# time, so the pool only has to cover the active request plus a little slack for
+# a connection that has gone stale. pool_recycle is deliberately short: a frozen
+# Lambda leaves behind TCP sockets the database has already dropped, and the old
+# one-hour recycle kept handing those dead sockets back to the application.
+# pool_timeout is short so a starved container fails fast instead of sitting on
+# the 30 second Lambda timeout.
 engine = create_engine(
     DATABASE_URL,
-    pool_size=1,           # در محیط سرورلس نیازی به استخر بزرگ نداریم
-    max_overflow=0,
-    pool_recycle=3600,
-    pool_pre_ping=True,    # قبل از استفاده سلامت اتصال را چک می‌کند
+    pool_size=2,
+    max_overflow=3,
+    pool_timeout=3,
+    pool_recycle=300,
+    pool_pre_ping=True,    # checks connection health before handing it out
+    # hide_parameters keeps bound values out of SQLAlchemy error strings. Without
+    # it a failed INSERT raises a StatementError whose text carries the whole
+    # patient record, and Mangum writes that traceback to CloudWatch. Health data
+    # is special-category data under GDPR, so it must never reach the log.
+    hide_parameters=True,
     connect_args={
-        "connect_timeout": 5 # زمان انتظار برای اتصال را محدود می‌کند
+        "connect_timeout": 5  # bounds how long a connection attempt may block
     }
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -51,12 +108,23 @@ class RiskResultDB(Base):
 
 app = FastAPI(title="WELL-BEAT API - Advanced TRR Version")
 
+# Restricted to the deployed frontend origin. The HTTP API in front of this
+# Lambda has its own CORS configuration and overrides these headers, so the two
+# must be kept in step. allow_credentials is False because the frontend
+# authenticates with a bearer token, not with cookies.
+DEFAULT_ALLOWED_ORIGIN = "https://main.d184n5jh1hilpp.amplifyapp.com"
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("ALLOWED_ORIGINS", DEFAULT_ALLOWED_ORIGIN).split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 def get_db():
@@ -66,12 +134,11 @@ def get_db():
     finally:
         db.close()
 
-# --- دکمه‌ی جادویی برای حل مشکل دیتابیس (فقط برای مواقع اضطراری) ---
-@app.get("/reset-db")
-def reset_database():
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    return {"message": "Database successfully reset and updated to TRR schema!"}
+# The GET /reset-db route was removed on 2026-09-12. It called
+# Base.metadata.drop_all() with no confirmation and no authorisation check of its
+# own, so a single GET destroyed every stored assessment. Schema creation now
+# lives in backend/AWS/Lambda/init_db.py, which is run by hand and only ever
+# calls create_all(). Do not reintroduce a destructive route into this API.
 
 # --- 3. Input Models (Updated for TRR) ---
 class RiskInputSchema(BaseModel):
