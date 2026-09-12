@@ -642,6 +642,28 @@ supporting metrics table, an honest note that the 64.38 percent figure could not
 and answers to the questions most likely to follow. Arman's decision is to correct this in the
 talk rather than in the frozen paper.
 
+### Action once the quota increase lands: set reserved concurrency to 20
+
+The concurrency ceiling of 10 is currently the only thing protecting the database from being
+overwhelmed by connections. Raising the quota to 1000 removes that accidental protection, so a
+deliberate ceiling has to replace it in the same change, not later.
+
+A `db.t3.micro` allows roughly 112 connections, and the SQLAlchemy pool is configured for up to
+five per execution environment (`pool_size=2`, `max_overflow=3`). A reservation of 20 caps the
+worst case at about 100 connections, which stays inside the limit with a little room.
+
+```bash
+aws lambda get-account-settings --query 'AccountLimit.ConcurrentExecutions'   # wait for 1000
+aws lambda put-function-concurrency \
+  --function-name WellBeat-Risk-Engine --reserved-concurrent-executions 20
+```
+
+AWS refuses to set a reservation unless at least 100 unreserved concurrent executions remain in
+the account, so this is only possible after the increase lands. Verify afterwards with
+`aws lambda get-function-concurrency --function-name WellBeat-Risk-Engine`.
+
+Tracked in `POST-CONFERENCE.md`.
+
 ## 22. State at the end of this session
 
 | Item | Value |
