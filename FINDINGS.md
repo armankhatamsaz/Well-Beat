@@ -255,7 +255,9 @@ the log group would age them out without anyone having to read them.
 ## 8. Synthetic rows removed
 
 Nine rows under `user_id` 999001 were deleted, seven from the session 1 verification and two
-from verification calls made earlier in this session.
+from verification calls made earlier in this session. The same guarded delete was run a second
+time at the very end of the session, removing a further two rows created by the post-deployment
+checks, so `user_id` 999001 holds nothing. Both runs passed every integrity check.
 
 ```sql
 DELETE FROM risk_results WHERE user_id = 999001;
@@ -396,3 +398,202 @@ Every change in this session is reversible.
 - Frontend: `git revert` the commit and push. Amplify rebuilds from `main` automatically.
 - The deleted synthetic rows are the one irreversible change, and they were synthetic. The
   manual snapshot `before-lockdown-12sep` predates the deletion.
+
+---
+
+# Session 3 — 2026-09-12, network lockdown attempt, retention, token scrub
+
+**Scope:** move the Lambda inside the VPC and close the public database rule, set log retention,
+remove the committed Cognito token, draft the quota increase request.
+**Outcome:** the network change is **blocked and not done**. The database is still reachable
+from the internet. Everything else completed.
+
+## 14. The network lockdown is blocked on an IAM permission
+
+The plan was sound and the preparation is in place, but the change cannot be completed with the
+credentials available. Attaching the function to the VPC fails immediately:
+
+```
+An error occurred (InvalidParameterValueException) when calling the
+UpdateFunctionConfiguration operation: The provided execution role does not have
+permissions to call CreateNetworkInterface on EC2
+```
+
+This is a clean rejection, not a partial failure. Lambda validates the execution role before it
+changes anything, so `VpcConfig` is still null, the function never entered a pending state, and
+the application was not interrupted. A risk assessment submitted straight afterwards returned
+the expected 50.4 percent for the standard synthetic patient.
+
+**What is needed.** The execution role `WellBeat-Risk-Engine-role-t9mmq85e` needs the AWS managed
+policy `AWSLambdaVPCAccessExecutionRole`, which grants `ec2:CreateNetworkInterface`,
+`ec2:DescribeNetworkInterfaces` and `ec2:DeleteNetworkInterface`. This could not be checked or
+fixed from this session because `.claude/settings.json` denies `aws iam:*`, deliberately.
+
+## 15. Network facts, established and worth keeping
+
+| Item | Value |
+|---|---|
+| VPC | `vpc-03afb752c708dd477`, the default VPC, `172.31.0.0/16` |
+| Subnet, eu-south-1a | `subnet-08759be0133739e10`, `172.31.32.0/20` |
+| Subnet, eu-south-1b | `subnet-082c07f12f86943fe`, `172.31.0.0/20`, **the database lives here** |
+| Subnet, eu-south-1c | `subnet-018d5c825e4617fe6`, `172.31.16.0/20` |
+| Route table | `rtb-01db225381b8008ab`, main, no explicit associations |
+| Routes | `172.31.0.0/16` local, `0.0.0.0/0` to `igw-05d6eeefe7fbf538c` |
+| NAT gateways | none |
+| VPC endpoints | none |
+| ENIs in region | 3, all belonging to RDS. Quota 5000 |
+| `enableDnsSupport` / `enableDnsHostnames` | both true |
+
+Two conclusions follow.
+
+All three subnets are public, in the sense that they route to an internet gateway. A Lambda
+interface never receives a public address, so a function placed in them has **no internet
+access**. That is acceptable only because the function needs none, which was proven three ways:
+the import list contains no HTTP client, a search for `requests`, `httpx`, `boto3`, `urlopen`,
+`urllib.request`, `socket`, `http.client` and `aiohttp` in the running source returns nothing,
+and the deployed package bundles **no HTTP client library at all**, not even `urllib3`. The only
+network-capable component in the package is `psycopg2`. The single `urllib` import is
+`quote_plus`, which is string escaping, and the Amplify URL in the file is a CORS allow-list
+entry that is compared against, never fetched. Token validation happens at the API Gateway
+authorizer, outside the function.
+
+Because both VPC DNS attributes are true, the database endpoint resolves to a **private** address
+from inside the VPC. No code change is needed for the move. From outside it currently resolves to
+the public address `15.161.36.53`.
+
+## 16. What is in place, and why it is safe to leave
+
+| Resource | Id | State |
+|---|---|---|
+| Lambda security group | `sg-092e73d1fd27b91ce` (`wellbeat-lambda-sg`) | created, no inbound rules, zero members |
+| Rule: 5432 from the Lambda group | `sgr-0fe43bf9ad47e72a3` | added to the RDS group |
+| Rule: 5432 from `0.0.0.0/0` | `sgr-0a302b81325c0cc52` | **still present** |
+
+The new rule grants nothing today, because no network interface belongs to
+`sg-092e73d1fd27b91ce`. A security group reference only permits traffic from members of that
+group, and it has none. Leaving it costs nothing and means the change can be resumed in one
+command once the IAM policy is attached.
+
+**The public rule was deliberately not touched.** Removing it before the VPC path works would
+have taken the application down.
+
+## 17. How to resume, once the IAM policy is attached
+
+```bash
+# 1. attach the managed policy (needs IAM rights this session does not have)
+aws iam attach-role-policy \
+  --role-name WellBeat-Risk-Engine-role-t9mmq85e \
+  --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+
+# 2. attach the function to the VPC
+aws lambda update-function-configuration --function-name WellBeat-Risk-Engine \
+  --vpc-config "SubnetIds=subnet-082c07f12f86943fe,subnet-08759be0133739e10,subnet-018d5c825e4617fe6,SecurityGroupIds=sg-092e73d1fd27b91ce"
+aws lambda wait function-updated --function-name WellBeat-Risk-Engine
+
+# 3. verify BEFORE closing anything: direct invoke, gateway POST, history GET, cold and warm latency
+
+# 4. only then close the public rule
+aws ec2 revoke-security-group-ingress \
+  --group-id sg-02ffe13c200596078 --security-group-rule-ids sgr-0a302b81325c0cc52
+```
+
+Rollback for step 4 is `authorize-security-group-ingress` re-adding `0.0.0.0/0`, effective in
+about five seconds. Rollback for step 2 is `update-function-configuration` with empty subnet and
+group lists, effective in 60 to 120 seconds.
+
+**A trap to remember.** While the `0.0.0.0/0` rule is still present it also permits private
+source addresses, so a VPC-attached function will connect successfully whether or not the
+group-to-group rule is correct. Step 3 passing does not prove the new path works. The real test
+is the moment the public rule is removed, so verify again immediately after step 4.
+
+## 18. Database access from a laptop, once the lockdown completes
+
+**This does not apply yet.** The public rule is still in place and `init_db.py`, `acid_test.py`
+and `latency_test.py` still run from a laptop today. It applies the moment step 4 above is done.
+
+Once the public rule is gone, nothing outside the VPC can reach port 5432. Those three scripts
+will fail with a connection timeout, and so will any direct `psql` or `psycopg2` session,
+including the guarded synthetic-row cleanup used in session 2.
+
+**Do not leave a standing rule in place for convenience.** An always-open rule scoped to a home
+or university address is still a permanent hole in front of special-category health data, and
+those addresses change, which leads to the rule being widened until it is `0.0.0.0/0` again.
+
+The correct procedure when someone genuinely needs direct access:
+
+1. Write down why access is needed and what will be run. A schema migration qualifies. Browsing
+   data does not.
+2. Take a manual RDS snapshot first if anything will be written.
+3. Add a temporary inbound rule for **one address with a /32 mask**, never a range, and put the
+   reason and the date in the rule description:
+   ```bash
+   aws ec2 authorize-security-group-ingress --group-id sg-02ffe13c200596078 \
+     --ip-permissions "IpProtocol=tcp,FromPort=5432,ToPort=5432,IpRanges=[{CidrIp=<your.ip>/32,Description='<reason>, added <date>, remove same day'}]"
+   ```
+4. Do the work.
+5. Remove the rule in the same working session, and confirm it is gone:
+   ```bash
+   aws ec2 revoke-security-group-ingress --group-id sg-02ffe13c200596078 \
+     --security-group-rule-ids <the rule id returned in step 3>
+   aws ec2 describe-security-group-rules --filters Name=group-id,Values=sg-02ffe13c200596078
+   ```
+6. Confirm from outside that the port is closed again.
+
+The better long-term answer is not to need the rule at all. A schema migration can run from a
+small one-off Lambda inside the VPC using the same security group, which leaves no inbound path
+open at any point. That is worth building after the conference rather than before it.
+
+## 19. Log retention: the old leak is gone
+
+A 30-day retention policy was set on `/aws/lambda/WellBeat-Risk-Engine`, which previously had
+none and kept everything forever.
+
+The nine bound-parameter dumps from 2026-03-04 are **gone**. They were never read. Verified by
+count, not by content:
+
+| Check | Result |
+|---|---|
+| Log events remaining in March 2026 | 0 |
+| Log events older than the 30-day cutoff of 2026-08-13 | 0 |
+| Bound-parameter dumps remaining in the whole group | 1 |
+
+The single remaining dump is from 2026-09-12 at 14:55 UTC. That is the deliberate pre-fix probe
+from session 2, carrying the synthetic record with `user_id` 9999999999. It ages out on
+2026-10-12.
+
+## 20. Committed token removed
+
+The hardcoded Cognito ID token was removed from `stress_test.js` and `cold_start_bench.py`. Both
+now read `WELLBEAT_TOKEN` from the environment and fail with a clear message naming the variable
+when it is missing. Neither the token nor the email address it carried was printed at any point.
+
+```bash
+k6 run -e WELLBEAT_TOKEN="<id token>" stress_test.js
+```
+
+**Two more files still contain the same kind of token and were left alone**, because this
+session's instructions named only the two files above:
+
+| File | Token type | Expired | Carries |
+|---|---|---|---|
+| `backend/AWS/Lambda/phase1_2_validation.py` | Cognito ID token | yes, 2026-05-15 15:40 UTC | email, username, subject id, name |
+| `backend/AWS/Lambda/test_2_2_equivalence.py` | Cognito ID token | yes, 2026-05-15 15:40 UTC | email, username, subject id, name |
+
+Both are expired and grant nothing, but both are personal data committed to the repository. They
+are a one-line change each, the same as the two already done.
+
+A full working-tree scan found nothing else. The Cognito pool and app client ids in `CLAUDE.md`
+and `frontend/src/main.jsx` are published client configuration, not secrets. The email address in
+`Login.jsx` is a placeholder on `example.com`. The connection string in this file carries the
+literal text `<redacted>`, not a password.
+
+Note that removing a secret from the working tree does not remove it from git history. The four
+tokens and the old database password all remain in earlier commits. All of them are expired or
+rotated.
+
+## 21. Rollback state at the end of this session
+
+Nothing needs rolling back. The only mutations were a new security group with no members, one
+rule that currently grants nothing, a log retention policy, and two source files. The Lambda
+configuration, the API, the database and the frontend are byte-for-byte as session 2 left them,
+with `CodeSha256` still `oDA3DFwghKtmntHGgl/zVcbcKZaSrUUMRTy4RT6NdEw=`.

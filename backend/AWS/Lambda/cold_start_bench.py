@@ -1,11 +1,21 @@
+import os
 import time
 import requests
 import json
 
 # آدرس دقیق API شما
 URL = "https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/static"
-# همان توکنی که از URL مرورگر کپی کردی
-TOKEN = "Bearer eyJraWQiOiJ2Wmd0TmRKUmNFV3FVQnRCUmUyZTc5NFRFUUVCN1grS1ZIUklhdkRCUklZPSIsImFsZyI6IlJTMjU2In0.eyJhdF9oYXNoIjoiY3FxTFZPRWREWV8xNUtNTzNUc2JOUSIsInN1YiI6IjY2N2U4MmMwLWIwMDEtNzBmYi1lYmM3LWJkNDQ4MmY0OTFmOCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuZXUtc291dGgtMS5hbWF6b25hd3MuY29tXC9ldS1zb3V0aC0xX2NoZDd0R0FBdyIsImNvZ25pdG86dXNlcm5hbWUiOiI2NjdlODJjMC1iMDAxLTcwZmItZWJjNy1iZDQ0ODJmNDkxZjgiLCJhdWQiOiIxZnNxZW1iOGZobWhvbjE5OG9hZm5idjQ4dSIsImV2ZW50X2lkIjoiZDE4ZDVlNmMtOWIyMC00M2YyLWI1NGUtZGVmODhlNDJiYWZlIiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE3Nzg3ODkzNzgsIm5hbWUiOiJBcm1hbiIsImV4cCI6MTc3ODc5Mjk3OCwiaWF0IjoxNzc4Nzg5Mzc4LCJqdGkiOiI2OTdmMWZjMy01NjRjLTQ5MjctYmMyYS1kZjQwMGJmM2E4NDUiLCJlbWFpbCI6ImFybWFuLmt0ekBob3RtYWlsLmNvbSJ9.eRRLLvZVVdAbPHVWphtxgFMrJ9bZmAgSHojaE0qpen1AH80lkkwI0AOTg4mQgkWGcUzLlf4KXoCdpTY-UBFWSs-ZHOfA2IyhqCbysEPo9fWRlzRP6ZGoybO967xDla9sbBnDop0WKFA0_dpTjsENVjlw3KnbpSYxVpCJg25zYluZdvNq3ZgvRAZKGL3HDbXdojX1BMmd-dmggXk8hzOD8x-Yw88OeLFdYvI4_F10JALkpbAaCnTsTpMnI0TLloWcslOOI5Bsl-gABLkoaduNEkNjTsOLGgjXaoyU-SC1vy24r1qvf_drr4sSn8VX-9Dm4HPHhuj4QsO96RBQIIHfmw"
+# The Cognito ID token is supplied at run time, never stored in this file.
+# A real token used to be hardcoded here and was committed to the repository.
+# It carried a live user's email address and Cognito subject id. Do not put one
+# back. Set WELLBEAT_TOKEN in your shell before running this script.
+_token = os.environ.get("WELLBEAT_TOKEN", "").strip()
+if not _token:
+    raise SystemExit(
+        "WELLBEAT_TOKEN is not set. Export a Cognito ID token before running "
+        "this benchmark. Nothing is hardcoded in this file."
+    )
+TOKEN = _token if _token.startswith("Bearer ") else "Bearer " + _token
 
 payload = {
     "user_id": 2000, "age": 45, "gender": "male", "height": 175, "weight": 75,
