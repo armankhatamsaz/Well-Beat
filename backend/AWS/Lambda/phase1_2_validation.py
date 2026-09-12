@@ -1,8 +1,19 @@
+import os
 import requests
 import json
 
 URL = "https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/static"
-TOKEN = "Bearer eyJraWQiOiJ2Wmd0TmRKUmNFV3FVQnRCUmUyZTc5NFRFUUVCN1grS1ZIUklhdkRCUklZPSIsImFsZyI6IlJTMjU2In0.eyJhdF9oYXNoIjoid0RydE9tdFNONURwZExGRTA0MnA4dyIsInN1YiI6IjY2N2U4MmMwLWIwMDEtNzBmYi1lYmM3LWJkNDQ4MmY0OTFmOCIsImVtYWlsX3ZlcmlmaWVkIjp0cnVlLCJpc3MiOiJodHRwczpcL1wvY29nbml0by1pZHAuZXUtc291dGgtMS5hbWF6b25hd3MuY29tXC9ldS1zb3V0aC0xX2NoZDd0R0FBdyIsImNvZ25pdG86dXNlcm5hbWUiOiI2NjdlODJjMC1iMDAxLTcwZmItZWJjNy1iZDQ0ODJmNDkxZjgiLCJhdWQiOiIxZnNxZW1iOGZobWhvbjE5OG9hZm5idjQ4dSIsImV2ZW50X2lkIjoiOGVmMDBmNjQtMmI3My00NWQ3LWFlNDEtMTBiZmQ4NGEyZDU5IiwidG9rZW5fdXNlIjoiaWQiLCJhdXRoX3RpbWUiOjE3Nzg4NTYwMDAsIm5hbWUiOiJBcm1hbiIsImV4cCI6MTc3ODg1OTYwMCwiaWF0IjoxNzc4ODU2MDAwLCJqdGkiOiIxY2I4ZmFjOS02NDcwLTQzMTEtODg1Ni0yNDM3NjBmYTkwODkiLCJlbWFpbCI6ImFybWFuLmt0ekBob3RtYWlsLmNvbSJ9.VEtwfpLoGEV5mFu-TYDUClIeUpIURrlOnQIPFaOLPyDtCVB5lNVXGp4Pi8c5EFTA-F7jEdnbB8PU6lMOTzg6ex07LG0xDbhqnRoxnOIJRJYO1BxQzI7H4wDTXHwEdB0MLF7F2sQ9-izccG8c-jgpU-KOGftbRvKMuhlzJZOjaCFsqnQuNscu4QB8ziFknWmrF1UrAOIihF5XyvYgJAMIN8SZzhG9Io3USiiaJO6gTH5gKglKtjLNLdx7t56BbijEmt-Bqg-kXU6bFMZTwbA2t08H79Q7bYed_p6ftrhQXQLnLgQUCT-qWb6eaP-6MmcWbB6ygSjFMVVEvelZGUnMsQ"
+# The Cognito ID token is supplied at run time, never stored in this file.
+# A real token used to be hardcoded here and was committed to the repository.
+# It carried a live user's email address and Cognito subject id. Do not put one
+# back. Set WELLBEAT_TOKEN in your shell before running this script.
+_token = os.environ.get("WELLBEAT_TOKEN", "").strip()
+if not _token:
+    raise SystemExit(
+        "WELLBEAT_TOKEN is not set. Export a Cognito ID token before running "
+        "this script. Nothing is hardcoded in this file."
+    )
+TOKEN = _token if _token.startswith("Bearer ") else "Bearer " + _token
 HEADERS = {"Content-Type": "application/json", "Authorization": TOKEN}
 
 def test_1_2_boundary_validation():
