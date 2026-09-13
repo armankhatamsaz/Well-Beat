@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useAuth } from "react-oidc-context";
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
@@ -9,23 +9,15 @@ import HomeView from './components/HomeView';
 function App() {
   const auth = useAuth(); // هوکِ آمازون کاگنیتو
   const assessment = useHealthStore((state) => state.assessment);
-  const isAuthenticatedStore = useHealthStore((state) => state.isAuthenticated);
   const currentView = useHealthStore((state) => state.currentView);
-  const loginStore = useHealthStore((state) => state.login);
 
-  // سینک کردنِ دیتای آمازون با سیستمِ عصبی سایت خودمون
-  useEffect(() => {
-    if (auth.isAuthenticated && !isAuthenticatedStore) {
-      // گرفتن ایمیل کاربر از توکن آمازون
-      const userEmail = auth.user?.profile?.email || 'User';
-      const userName = auth.user?.profile?.name || userEmail.split('@')[0];
-      
-      loginStore({
-        name: userName,
-        email: userEmail,
-      });
-    }
-  }, [auth.isAuthenticated, isAuthenticatedStore, loginStore, auth.user]);
+  // The store login, and with it the assessment-history fetch, is dispatched from
+  // Layout, which is the only component holding the id_token. A second call used to
+  // be made here without a token. It always returned 401 at the gateway authorizer,
+  // and because both calls wrote to the store unconditionally, whichever finished
+  // last won: the unauthenticated one could overwrite a loaded history with an empty
+  // list, silently. Every branch below renders inside Layout, so nothing is lost by
+  // removing it.
 
   // صفحه لودینگِ زمانِ اتصال به آمازون
   if (auth.isLoading) {

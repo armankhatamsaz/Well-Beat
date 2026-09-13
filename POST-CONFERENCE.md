@@ -15,12 +15,15 @@ Full reasoning for every item is in `FINDINGS.md`. Severities use the same scale
 | 5 | **P2** | Purge the secrets still in git history | Four expired Cognito ID tokens carrying a real email address and the rotated database password remain in earlier commits; removing them needs a history rewrite and a force push. |
 | 6 | **P2** | Stop tracking `frontend/node_modules` | 5644 dependency files are committed and `.gitignore` does not exclude them, which is why the repository is large and dependency changes produce unreadable diffs. |
 | 7 | **P2** | Delete or wire up `QuickCheckInForm.jsx` | Nothing imports it, and it calls `runAssessment()` with no token and `saveAssessment()` with no arguments, so it would fail if it ever were wired up. |
+| 8 | **P2** | Silence the recharts `width(-1) and height(-1)` warning | Cosmetic: `ResponsiveContainer` in recharts 3.5.0 warns once on every mount because it initialises its size to `-1` before measuring, and recharts ships that warning to production. Both charts render correctly. The only fix is an `initialDimension`, which risks a one-frame flash in Figure 4, so it was not worth doing the week of the talk. Check whether a later recharts release drops the warning before changing any chart code. |
+| 9 | **P2** | Make local development work end to end against Cognito | `http://localhost:5173/` is in neither `CallbackURLs` nor `LogoutURLs` on the app client, so neither login nor logout can be exercised locally. Session 4 added the production sign-out URL only. Adding both localhost entries is a one-field change but widens the app client, so do it deliberately rather than in a hurry. |
+| 10 | **P2** | Review the `react-hooks/set-state-in-effect` error in `App.jsx` | Surfaced when the ESLint tally was recounted in session 4. It is a real rule, not the `motion` false positive, and it flags the login-sync effect pattern that produced the history race. Worth understanding now that the duplicate call is gone. |
 
 ## Suggested order
 
 Item 1 first, because it is the only one that is a live compliance exposure rather than an
 engineering debt. Item 2 is time-coupled: it has to happen in the same change as the quota
-increase, not afterwards. Items 3 to 7 can be done in any order and are safe to batch.
+increase, not afterwards. Items 3 to 10 can be done in any order and are safe to batch.
 
 ## Items deliberately not on this list
 
@@ -29,6 +32,8 @@ increase, not afterwards. Items 3 to 7 can be done in any order and are safe to 
 - The modelling assumptions in the risk engine, including `total_chol = ldl + hdl + 30`, the
   arrhythmia term and the BMI terms. These are published and frozen; they are documented in
   section 4 of `CLAUDE.md` as reporting items, not defects to fix.
-- The 21 ESLint errors in the frontend. All are the same false positive where the rule does not
-  recognise `motion.div` as a use of the imported `motion`. Cosmetic, and not worth a rule change
-  that might mask a real unused import later.
+- The 21 ESLint errors in the frontend, **with one exception now split out as item 10**. Session 2
+  recorded all 21 as the same `motion.div` false positive; a recount in session 4 showed the tally
+  is 16 `no-unused-vars`, 3 `react-hooks/static-components`, 1 `react-hooks/set-state-in-effect`
+  and 1 `no-useless-escape`. The 16 are the false positive and remain not worth a rule change that
+  might mask a real unused import later.

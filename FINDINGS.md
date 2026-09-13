@@ -678,3 +678,291 @@ Tracked in `POST-CONFERENCE.md`.
 | Site, API, CORS | 200, 401 without a token, evil origin 400 |
 
 `main.py`, the risk engine and the frontend were not touched in this session.
+
+---
+
+# Session 4 — 2026-09-13, three user-visible bugs before the talk
+
+**Scope:** logout landing on an error page, assessment history intermittently empty with no
+error shown, and a recharts console warning about invalid chart dimensions.
+**Outcome:** logout and history fixed, with one Cognito configuration change and three separable
+code changes. The chart warning is cosmetic and was deliberately left alone.
+
+Five days before the SoftCom talk, with a QR code in the paper pointing at the deployment, so the
+standard applied throughout was: smallest change that fixes the bug, nothing else touched.
+
+## 23. Baseline: the working tree matched the deployment exactly
+
+Established before any edit, so that a later hash change could only be my doing.
+
+```
+local  dist/assets/index-qpwO21ns.js   sha256 3a38ba0b416d18ac058c3233ea0701d05b35fb68658abb7df61a6fc1117925ab
+live   /assets/index-qpwO21ns.js       sha256 3a38ba0b416d18ac058c3233ea0701d05b35fb68658abb7df61a6fc1117925ab
+```
+
+Worth repeating in future sessions. It costs one build and it removes all doubt about whether the
+source in front of you is the source that is running.
+
+## 24. Bug 1 — logout. Cognito does not implement RP-initiated logout
+
+**Symptom.** Clicking sign out landed on "This page isn't working". The user was signed out but
+could not sign back in without typing the address again.
+
+```
+GET https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com/login?id_token_hint=<redacted>
+400 (Bad Request)     call stack: signoutRedirect -> _signoutStart -> navigate
+```
+
+**Two faults, one in configuration and one in code.**
+
+Cognito's discovery document *does* advertise an end session endpoint, which is what leads the
+library astray:
+
+```
+GET .../eu-south-1_chd7tGAAw/.well-known/openid-configuration
+  "end_session_endpoint": "https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com/logout"
+```
+
+So `oidc-client-ts` performs a standard OIDC RP-initiated logout against it. But Cognito's
+`/logout` is not an OIDC end session endpoint. It wants `client_id` and `logout_uri`, and it
+ignores `id_token_hint`. `SignoutRequest` in `oidc-client-ts` 3.4.1 appends `client_id` under
+exactly one condition:
+
+```js
+if (!client_id && post_logout_redirect_uri && !id_token_hint) { client_id = this.settings.client_id; }
+```
+
+`post_logout_redirect_uri` was not configured in `main.jsx` and `id_token_hint` *was* present, so
+neither `client_id` nor a return URL was sent. Cognito then bounces to `/login` with the same
+query string, and `/login` without `client_id` and `response_type` answers 400.
+
+Reproduced against live Cognito before changing anything:
+
+```
+GET /logout?id_token_hint=DUMMY   -> 302  Location: .../login?id_token_hint=DUMMY
+GET /login?id_token_hint=DUMMY    -> 400 Bad Request
+```
+
+The second fault: the app client had **no allowed sign-out URLs at all**, `LogoutURLs: null`.
+Correct client code would have failed too.
+
+### Which query shape Cognito actually honours
+
+Tested after registering the sign-out URL, rather than assumed. This table is the reason the fix
+looks the way it does:
+
+| Query | Result |
+|---|---|
+| `client_id` + `logout_uri` | **302 straight back to the app** |
+| `id_token_hint` + `client_id` + `logout_uri` | 302 back to the app, the hint is harmless |
+| `client_id` + `post_logout_redirect_uri` | **302 to `/login`, then 400** |
+| `id_token_hint` alone | 302 to `/login`, then 400 — the bug |
+
+**Cognito ignores `post_logout_redirect_uri`.** Configuring it in `main.jsx` and keeping
+`signoutRedirect()` would not have worked. That is the obvious fix and the wrong one.
+
+### The configuration change
+
+`LogoutURLs` on app client `1fsqemb8fhmhon198oafnbv48u` went from `null` to
+`["https://main.d184n5jh1hilpp.amplifyapp.com/"]`. It takes effect immediately for every user and
+needs no build.
+
+**`update-user-pool-client` replaces the entire client configuration**, the same trap that
+`update-function-configuration` set for the Lambda environment variables in session 2. A partial
+call silently deletes callback URLs, OAuth flows and token validity. The update was therefore
+built by reading the live configuration, dropping only the read-only fields, adding the one key,
+and sending every other field back verbatim. Verified by diffing before against after:
+
+```
+LogoutURLs:  None  ->  ['https://main.d184n5jh1hilpp.amplifyapp.com/']
+Unchanged fields: 20 of 21
+```
+
+`http://localhost:5173/` was deliberately not added. Local login does not work either, because
+localhost is not in `CallbackURLs`, and widening that was not worth doing this week.
+
+### The code change
+
+`handleLogout` in `Layout.jsx` now clears the local OIDC session and navigates to Cognito's own
+sign-out form, instead of calling `auth.signoutRedirect()`.
+
+The `id_token_hint` shape also works and would have been a one-line change. It was rejected
+because it puts a live ID token, which carries the user's email address, into the browser address
+bar and browser history. Session 3 scrubbed four expired tokens out of git for exactly that
+reason; there is no sense reintroducing the same exposure through the URL bar.
+
+## 25. Bug 2 — history. Two requests, one of which could never succeed
+
+**Symptom.** Assessment history intermittently empty. Same account, failed on one attempt and
+succeeded on the next, consistently fine in Chrome and on mobile, worse in Edge. On failure the
+user saw an empty list, not an error.
+
+**Not a timing window on token availability, and not an expired token.** Two components called
+the store's `login()` on the same commit. `Layout.jsx` passed the ID token. `App.jsx` did not:
+
+```js
+// Layout.jsx — with token
+loginStore({ name: finalName, email: profile.email }, auth.user.id_token);
+// App.jsx — no second argument
+loginStore({ name: userName, email: userEmail });
+```
+
+and the store sent an empty header for the second:
+
+```js
+headers: { "Authorization": token ? `Bearer ${token}` : "" }
+```
+
+Layout is a child of App, so React flushed its effect first and fired the authorised request.
+App's effect then ran, saw `isAuthenticated` still false in the store because nothing had been
+`set` yet, and fired a second, unauthenticated request. **Both wrote to the store unconditionally
+when they resolved, so whichever finished last won.** When the 401 landed last it overwrote a
+loaded history with an empty one.
+
+The silence was structural. The 401 branch failed the `response.ok && dbData.data` test, left
+`realHistory` as `[]`, and set the store with `history: []` and `streak: 0` and no error flag. An
+empty list was indistinguishable from a user who had never run an assessment.
+
+Both call sites were confirmed present in the **deployed** bundle, not only in source:
+
+```js
+n({name:u,email:c.email},a.user.id_token)   // Layout
+i({name:c,email:u})                          // App, no token
+```
+
+The empty header is rejected exactly as observed, and the reason string is diagnostic:
+
+```
+$ curl -H "Authorization;" .../risk/history/999999
+HTTP/1.1 401 Unauthorized
+www-authenticate: Bearer scope="" error="invalid_token"
+                  error_description="token contains an invalid number of segments"
+```
+
+An **expired** token returns a different `error_description`. Remember this: the
+`www-authenticate` header on a 401 distinguishes a missing header from an expired token in one
+step, and it is visible in the Network tab under Response Headers. It is not in the console.
+
+Arman then reproduced the 401 in a clean Chrome incognito window with extensions disabled, in a
+window where the token was seconds old, which rules out expiry independently. The `M_ID` errors
+from `200.js` seen in the earlier console session came from a browser extension, not from this
+application, and can be disregarded.
+
+### What changed
+
+Three small edits, kept separable:
+
+- `App.jsx`: the duplicate token-less effect deleted. Every branch of `App` renders inside
+  `Layout`, so no code path lost its login call.
+- `Layout.jsx`: the guard now requires `auth.user?.id_token`, not merely `auth.user`. A refresh
+  callback is passed as a third argument.
+- `useHealthStore.js`: on 401 the store calls that callback **once** and retries. `signinSilent()`
+  exchanges the refresh token rather than redirecting, so the retry costs one token call. The
+  client allows it (`ALLOW_REFRESH_TOKEN_AUTH`, refresh token valid 5 days).
+
+The refresh callback depends on `signinSilent` destructured from the auth context, not on the
+whole `auth` object. `react-oidc-context` memoises its methods on a `UserManager` held in
+`useState`, so `signinSilent` is a stable reference. Depending on `auth` instead satisfies the
+linter just as well but re-runs the effect on every auth state change, which widens the very
+trigger surface this bug came from.
+
+### Error states, which is the half that matters
+
+A `historyError` field was added to the store: `null`, `'expired'`, or `'failed'`.
+`HistoryStatusBanner.jsx` renders it above the page content in `Layout`, so it is visible on every
+view rather than only on the profile page.
+
+| Situation | What the user sees |
+|---|---|
+| 401 that survives the retry | "Your session has expired..." plus a Sign in again button |
+| Any other HTTP failure, or a network error | "Your assessment history could not be loaded..." |
+| Success, zero rows | nothing — an empty list now genuinely means no assessments |
+
+One related defect was closed on the way. The old failure path built a thinner user object,
+`{ ...userData, history: [], streak: 0 }`, missing `birthDate`, `riskGoal` and `avatar`. Since
+`calculateAge(undefined)` silently returns 45, a failed history load quietly changed the age used
+for the next assessment. All paths now build the same object through one `buildUser` helper.
+
+## 26. Bug 3 — chart dimensions. A recharts artefact, not a WellBeat defect
+
+```
+The width(-1) and height(-1) of chart should be greater than 0, ...
+```
+
+`ResponsiveContainer` in recharts 3.5.0 initialises its measured size to `{width: -1, height: -1}`
+and only measures the DOM in a passive effect, after the first render:
+
+```js
+// node_modules/recharts/es6/component/ResponsiveContainer.js:48
+initialDimension = { width: -1, height: -1 },
+```
+
+With both at `-1` the warning condition is false, so **every `ResponsiveContainer` emits this once
+on mount**, always. The effect then measures, state updates, and the chart draws. It reaches
+production because recharts hardcodes `var isDev = true` in its own logger; the string was
+confirmed present in `index-qpwO21ns.js`.
+
+The reported `minWidth(0)`, `minHeight(undefined)` and `aspect(undefined)` are recharts' own
+defaults, which both WellBeat charts use, so **the message alone cannot identify which chart it
+came from**. Arman resolved it from the source link: `index-qpwO21ns.js:237`, the radar chart,
+which renders correctly and warns exactly once.
+
+Both containers have a guaranteed non-zero box, which is why neither actually fails:
+
+| Chart | Container | Guarantee |
+|---|---|---|
+| `RiskBreakdown` radar, Figure 4 | `flex-1 min-h-[250px]` in `h-full flex flex-col` | `min-h-[250px]` floors the height |
+| `TrendChart` area | `flex-1 w-full min-h-0` in `h-[400px] flex flex-col` | fixed 400 px parent |
+
+**Deliberately not fixed.** The only way to silence it is to hand `ResponsiveContainer` an
+`initialDimension`, which makes it paint the chart at a wrong size for one frame before
+correcting. Trading a console line nobody in the audience will see for a possible visible flash in
+the figure that is going on the slides is a bad trade five days out. Moved to
+`POST-CONFERENCE.md`.
+
+## 27. Verification
+
+| Check | Result |
+|---|---|
+| `npm run build` | succeeds, `dist/assets/index-C7kOqnnZ.js`, 855.04 kB |
+| ESLint | 21 errors, 0 warnings — identical to the pre-existing baseline |
+| Lint errors in files touched | 1, the pre-existing `no-useless-escape` on the name-splitting regex |
+| `login()` call sites in the built bundle | **1**, and it passes `id_token` |
+| `risk/history` fetch sites in the built bundle | 1 |
+| Cognito `/logout?client_id=...&logout_uri=...` in bundle | present |
+| Banner strings in bundle | all three present |
+| Cognito config fields changed | 1 of 21 |
+
+Built artefacts:
+
+```
+dist/assets/index-C7kOqnnZ.js    sha256 cefc49e936fc5996449103a9486db356ee1d146bcd7ccf267de5637a7fc86b41
+dist/assets/index-Bz1UGlBl.css   sha256 375dcded41b8e2c094d9db4dba11588c8860277750f00310f354df09ce794ab8
+```
+
+The CSS hash changes as well, which is expected: the banner introduces rose and amber utility
+classes that Tailwind had not previously emitted.
+
+**A correction to session 2.** That session recorded the 21 ESLint errors as "all of them the same
+false positive" about `motion.div`. That is not accurate. The tally is 16 `no-unused-vars`, 3
+`react-hooks/static-components`, 1 `react-hooks/set-state-in-effect` and 1 `no-useless-escape`.
+The count is unchanged by this session's work, but the characterisation was wrong, and the
+`set-state-in-effect` one is worth a look after the conference.
+
+## 28. Rollback
+
+Each fix is independent and revertible on its own.
+
+- **Cognito configuration**: set `LogoutURLs` back to empty the same way, replaying every other
+  field. Logout returns to its broken state; nothing else is affected.
+- **Fix 1, logout**: revert the `Layout.jsx` constants block and `handleLogout`.
+- **Fix 2, history request**: revert `App.jsx` in full, the `Layout.jsx` effect hunk, and the
+  `useHealthStore.js` `login` function.
+- **Fix 3, error message**: delete `HistoryStatusBanner.jsx`, remove its import and its one line in
+  `Layout.jsx`, and drop `historyError` from the store.
+
+Reverting fix 2 without fix 3 leaves a banner that never fires. Reverting fix 3 without fix 2
+leaves the retry working but silent on failure. Neither combination breaks the build.
+
+`main.py`, the risk engine, the Pydantic schema, the VPC, security groups, RDS and reserved
+concurrency were not touched in this session.

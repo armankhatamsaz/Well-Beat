@@ -41,6 +41,21 @@ const calculateAge = (birthDate) => {
     return age;
 };
 
+// One shape for the user object on every path through login(). The failure paths
+// used to build a thinner object that was missing birthDate, riskGoal and avatar,
+// which quietly changed how age and the trend goal were derived after an error.
+const buildUser = (userData, history) => ({
+    name: userData.name,
+    email: userData.email,
+    avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${userData.name || userData.email}&backgroundColor=2563eb&textColor=ffffff`,
+    height: 175,
+    weight: 70,
+    streak: calculateStreak(history),
+    riskGoal: 5,
+    history,
+    birthDate: '1980-01-01',
+});
+
 // --- موتور هش با سقف امنیتی دیتابیس ---
 const generateUserId = (email) => {
     if (!email) return 1;
@@ -56,6 +71,10 @@ export const useHealthStore = create((set, get) => ({
     user: null,
     currentView: 'dashboard',
     streakExtended: false,
+    // null when the history request succeeded. 'expired' when the session could not
+    // be renewed, 'failed' for anything else. An empty history with historyError
+    // null means the user genuinely has no assessments.
+    historyError: null,
 
     setView: (view) => set({ currentView: view }),
     resetStreakExtended: () => set({ streakExtended: false }),
@@ -77,20 +96,48 @@ export const useHealthStore = create((set, get) => ({
 
     assessment: null,
 
-    login: async (userData, token) => { // 👈 توکن امنیتی اینجا دریافت می‌شود
+    login: async (userData, token, refreshToken) => { // 👈 توکن امنیتی اینجا دریافت می‌شود
         const uniqueUserId = generateUserId(userData.email);
 
-        try {
-            const response = await fetch(`https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/${uniqueUserId}`, {
+        const fetchHistory = (bearer) => fetch(
+            `https://plfqx4z54f.execute-api.eu-south-1.amazonaws.com/risk/history/${uniqueUserId}`,
+            {
                 method: "GET",
                 headers: {
-                    "Authorization": token ? `Bearer ${token}` : "" // 👈 ارسال توکن برای دریافت تاریخچه
+                    "Authorization": `Bearer ${bearer}` // 👈 ارسال توکن برای دریافت تاریخچه
                 }
-            });
+            }
+        );
+
+        try {
+            let response = await fetchHistory(token);
+
+            // One retry, and only one. The gateway authorizer answers 401 for an
+            // expired token; ask the OIDC client for a fresh one and try again.
+            if (response.status === 401 && typeof refreshToken === 'function') {
+                const renewed = await refreshToken().catch(() => null);
+                if (renewed) {
+                    response = await fetchHistory(renewed);
+                }
+            }
+
+            // Still 401 after the retry: the session is genuinely gone. Surface it
+            // rather than presenting an empty history as if it were the truth.
+            if (response.status === 401) {
+                set({ isAuthenticated: true, historyError: 'expired', user: buildUser(userData, []) });
+                return;
+            }
+
+            if (!response.ok) {
+                console.error("History request failed with HTTP", response.status);
+                set({ isAuthenticated: true, historyError: 'failed', user: buildUser(userData, []) });
+                return;
+            }
+
             const dbData = await response.json();
-            
+
             let realHistory = [];
-            if (response.ok && dbData.data) {
+            if (dbData.data) {
                 realHistory = dbData.data.map(item => ({
                     date: item.test_date,
                     riskScore: item.calculated_risk_score,
@@ -102,29 +149,15 @@ export const useHealthStore = create((set, get) => ({
                 }));
             }
 
-            const currentStreak = calculateStreak(realHistory);
-            
-            set({
-                isAuthenticated: true,
-                user: {
-                    name: userData.name,
-                    email: userData.email,
-                    avatar: `https://api.dicebear.com/7.x/initials/svg?seed=${userData.name || userData.email}&backgroundColor=2563eb&textColor=ffffff`,
-                    height: 175,
-                    weight: 70,
-                    streak: currentStreak,
-                    riskGoal: 5,
-                    history: realHistory,
-                    birthDate: '1980-01-01',
-                }
-            });
+            set({ isAuthenticated: true, historyError: null, user: buildUser(userData, realHistory) });
         } catch (error) {
+            // Network-level failure. No health data is logged, only the error itself.
             console.error("Error fetching AWS history:", error);
-            set({ isAuthenticated: true, user: { ...userData, history: [], streak: 0 } });
+            set({ isAuthenticated: true, historyError: 'failed', user: buildUser(userData, []) });
         }
     },
 
-    logout: () => set({ isAuthenticated: false, user: null, assessment: null }),
+    logout: () => set({ isAuthenticated: false, user: null, assessment: null, historyError: null }),
 
     updateProfile: (updates) => set((state) => {
         const updatedUser = { ...state.user, ...updates };

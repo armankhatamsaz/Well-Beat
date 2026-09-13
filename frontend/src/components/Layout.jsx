@@ -5,6 +5,14 @@ import { useHealthStore } from '../store/useHealthStore';
 import { LogOut, Flame, Activity } from 'lucide-react';
 import { useAuth } from 'react-oidc-context'; // بادیگارد آمازون
 import GDPRBanner from './GDPRBanner'; // پاپ‌آ‌پ امنیتی
+import HistoryStatusBanner from './HistoryStatusBanner'; // پیام خطای تاریخچه
+
+// Hosted UI sign-out. These are published client configuration, not secrets; they
+// mirror the values in main.jsx. COGNITO_LOGOUT_URI must stay byte-identical to an
+// entry in the app client's LogoutURLs or Cognito redirects to /login and 400s.
+const COGNITO_DOMAIN = 'https://eu-south-1chd7tgaaw.auth.eu-south-1.amazoncognito.com';
+const COGNITO_CLIENT_ID = '1fsqemb8fhmhon198oafnbv48u';
+const COGNITO_LOGOUT_URI = 'https://main.d184n5jh1hilpp.amplifyapp.com/';
 
 const Layout = ({ children }) => {
     const user = useHealthStore((state) => state.user);
@@ -12,10 +20,16 @@ const Layout = ({ children }) => {
     const logoutStore = useHealthStore((state) => state.logout);
     const setView = useHealthStore((state) => state.setView);
     const auth = useAuth(); // فعال‌سازی هوک آمازون
+    // Stable reference: react-oidc-context memoises its methods on the UserManager,
+    // which is held in useState and never replaced. Depending on the whole auth
+    // object instead would re-run the effect on every auth state change.
+    const { signinSilent } = auth;
 
     useEffect(() => {
         // اجرا شدن فقط در صورتی که کاربر از سمت آمازون تایید شده باشه
-        if (auth.isAuthenticated && auth.user && !user) {
+        // id_token must already be present: the history request goes through the
+        // gateway's JWT authorizer, which answers 401 to a missing or empty header.
+        if (auth.isAuthenticated && auth.user?.id_token && !user) {
             
             // ۱. استخراج هوشمند و داینامیک نام واقعی (بدون هاردکد کردن هیچ اسمی)
             let finalName = 'User';
@@ -33,17 +47,37 @@ const Layout = ({ children }) => {
             }
 
             // ارسال توکن و نام صحیح به استور برای دریافت قطعی تاریخچه
+            // The third argument lets the store recover from a 401 exactly once:
+            // signinSilent() exchanges the refresh token, so it costs a token call
+            // rather than a redirect, and it returns a fresh id_token.
             loginStore({
                 name: finalName,
                 email: profile.email,
-            }, auth.user.id_token); 
+            }, auth.user.id_token, async () => {
+                const renewed = await signinSilent();
+                return renewed?.id_token ?? null;
+            });
         }
-    }, [auth.isAuthenticated, auth.user, user, loginStore]);
+    }, [auth.isAuthenticated, auth.user, user, loginStore, signinSilent]);
 
     // ۲. حل مشکل لاگ‌اوت ناقص
-    const handleLogout = () => {
+    // Cognito's sign-out endpoint is not an OIDC end-session endpoint. It requires
+    // client_id and logout_uri, it ignores post_logout_redirect_uri, and logout_uri
+    // must be listed in the app client's allowed sign-out URLs. oidc-client-ts
+    // signoutRedirect() sends id_token_hint on its own, which Cognito bounces to
+    // /login and answers 400. Navigate to Cognito's own form instead. The id_token
+    // is deliberately left out of the URL so it never reaches browser history.
+    const handleLogout = async () => {
         logoutStore(); // پاک کردن استیت از روی مرورگر
-        auth.signoutRedirect(); // 👈 هدایت به اندپوینت خروج آمازون برای ابطال کامل کوکی‌ها (نیاز به ورود مجدد)
+        try {
+            await auth.removeUser(); // clears the local OIDC session
+        } catch {
+            // Sign out at Cognito regardless, so the cookie cannot outlive the click.
+        }
+        window.location.assign(
+            `${COGNITO_DOMAIN}/logout?client_id=${COGNITO_CLIENT_ID}` +
+            `&logout_uri=${encodeURIComponent(COGNITO_LOGOUT_URI)}`
+        );
     };
 
     const displayDisplayName = user?.name || 'User';
@@ -103,6 +137,7 @@ const Layout = ({ children }) => {
             </header>
 
             <main className="max-w-7xl mx-auto px-6 py-8 relative">
+                <HistoryStatusBanner />
                 {children}
             </main>
 
