@@ -877,6 +877,12 @@ view rather than only on the profile page.
 | 401 that survives the retry | "Your session has expired..." plus a Sign in again button |
 | Any other HTTP failure, or a network error | "Your assessment history could not be loaded..." |
 | Success, zero rows | nothing — an empty list now genuinely means no assessments |
+| A new assessment succeeds after a failure | the banner clears |
+
+On that last row: the earlier entries may still be missing, so the banner is arguably still true.
+Arman's decision was to clear it, on the grounds that the user has just watched the API work and
+leaving a failure message up would confuse more than it informs. The consequence to be aware of is
+that the trend chart can then show a single point with nothing on screen explaining why.
 
 One related defect was closed on the way. The old failure path built a thinner user object,
 `{ ...userData, history: [], streak: 0 }`, missing `birthDate`, `riskGoal` and `avatar`. Since
@@ -924,7 +930,7 @@ the figure that is going on the slides is a bad trade five days out. Moved to
 
 | Check | Result |
 |---|---|
-| `npm run build` | succeeds, `dist/assets/index-C7kOqnnZ.js`, 855.04 kB |
+| `npm run build` | succeeds, `dist/assets/index-DXKaPpsY.js`, 855.06 kB |
 | ESLint | 21 errors, 0 warnings — identical to the pre-existing baseline |
 | Lint errors in files touched | 1, the pre-existing `no-useless-escape` on the name-splitting regex |
 | `login()` call sites in the built bundle | **1**, and it passes `id_token` |
@@ -936,7 +942,7 @@ the figure that is going on the slides is a bad trade five days out. Moved to
 Built artefacts:
 
 ```
-dist/assets/index-C7kOqnnZ.js    sha256 cefc49e936fc5996449103a9486db356ee1d146bcd7ccf267de5637a7fc86b41
+dist/assets/index-DXKaPpsY.js    sha256 5c37526db3a8102044c4c17d75d835e773561839275432e4a252524aec27f89d
 dist/assets/index-Bz1UGlBl.css   sha256 375dcded41b8e2c094d9db4dba11588c8860277750f00310f354df09ce794ab8
 ```
 
@@ -951,7 +957,10 @@ The count is unchanged by this session's work, but the characterisation was wron
 
 ## 28. Rollback
 
-Each fix is independent and revertible on its own.
+**All of this session's code went in as a single commit**, by Arman's decision, so `git revert`
+is all-or-nothing. The three fixes are still independent in the source, and the boundaries below
+are accurate, but undoing one of them on its own now means a hand edit rather than a revert.
+Reverting the whole commit is clean and returns the frontend to `index-qpwO21ns.js`.
 
 - **Cognito configuration**: set `LogoutURLs` back to empty the same way, replaying every other
   field. Logout returns to its broken state; nothing else is affected.

@@ -1,0 +1,122 @@
+Stages 2, 3 and 4 are complete.
+
+Result
+
+I fixed Bug 1 and Bug 2 and left Bug 3 alone as agreed. Bug 1 turned out to be two faults, not one: Cognito's discovery document advertises an end_session_endpoint, which makes oidc-client-ts attempt a standard RP-initiated logout that Cognito does not implement, and the app client had no allowed sign-out URLs at all. I registered the sign-out URL first, then probed the live endpoint to find out which query shape Cognito actually honours before writing any code — which was worth doing, because it proved that post_logout_redirect_uri does not work and the otherwise-obvious fix would have failed. Bug 2 was not a timing window but a duplicate dispatch: App.jsx and Layout.jsx both called the store's login(), and only Layout passed a token, so one of the two requests could never succeed and could overwrite a loaded history with an empty one. The build succeeds, lint is unchanged against its baseline, and all three fixes are present in the built bundle. Nothing is deployed — no commits, no pushes.
+
+Evidence
+
+Baseline, taken before any edit, proving the working tree was the running code:
+
+local dist/assets/index-qpwO21ns.js  sha256 3a38ba0b416d18ac058c3233ea0701d05b35fb68658abb7df61a6fc1117925ab
+live  /assets/index-qpwO21ns.js      sha256 3a38ba0b416d18ac058c3233ea0701d05b35fb68658abb7df61a6fc1117925ab
+
+Cognito configuration change, verified by diffing the whole client before against after:
+
+LogoutURLs:  None  ->  ['https://main.d184n5jh1hilpp.amplifyapp.com/']
+Unchanged fields: 20 of 21
+
+Which logout query shape Cognito honours, probed live after registering the URL:
+
+client_id + logout_uri                    -> 302  Location: https://main.d184n5jh1hilpp.amplifyapp.com/
+id_token_hint + client_id + logout_uri    -> 302  Location: https://main.d184n5jh1hilpp.amplifyapp.com/
+client_id + post_logout_redirect_uri      -> 302  Location: .../login?...   then 400
+id_token_hint alone   (the bug)           -> 302  Location: .../login?...   then 400
+
+Build, lint and bundle checks:
+
+✓ built in 9.90s
+dist/assets/index-C7kOqnnZ.js    855.04 kB   sha256 cefc49e936fc5996449103a9486db356ee1d146bcd7ccf267de5637a7fc86b41
+dist/assets/index-Bz1UGlBl.css    31.99 kB   sha256 375dcded41b8e2c094d9db4dba11588c8860277750f00310f354df09ce794ab8
+
+ESLint: 21 problems (21 errors, 0 warnings)   <- identical to the pre-existing baseline
+
+login() call sites in the built bundle: 1
+    ({name:f,email:d.email},a.user.id_token,async()...
+
+Hashes are reproducible across rebuilds.
+
+Findings
+
+- [P0] Cognito had no allowed sign-out URLs (LogoutURLs: null). Logout could not have worked for any user regardless of client code. Fixed in configuration; live now, no build needed.
+- [P1] Cognito ignores post_logout_redirect_uri. Configuring it and keeping signoutRedirect() looks like the natural fix and  + logout_uri does. Recorded in FINDINGS so nobody re-derives it.
+- [P1] Two history requests were issued per login, one permanently unauthenticated, and both wrote to the store unconditionally, so the outcome depended on which finished last. Confirmed in the deployed bundle, not just in source.
+- [P1] Every history failure was silent. The 401 branch produced history: [] with no error flag, making a failed load indistio assessments.
+- [P2] A failed history load silently changed the age used for the next assessment. The old error path built a user object without birthDate, and calculateAge(undefined) returns 45. Closed as part of Fix 2.
+- [P2] www-authenticate on a 401 distinguishes a missing header from an expired token in one step — "token contains an invalian expiry message. It is in the Network tab, not the console. Worth knowing for the next 401.
+- [P2] Session 2's ESLint claim was inaccurate. It recorded all 21 errors as the same motion.div false positive; the real tally is 16 no-unused-vars, 3 react-hooks/static-components, 1 react-hooks/set-state-in-effect, 1 no-useless-escape. Corrected in both documents; the
+  set-state-in-effect one is now POST-CONFERENCE item 10.
+- [P2] Bug 3 is a recharts artefact, not a WellBeat defect. ResponsiveContainer initialises to -1 and warns once on every mount, in production, because recharts hardcodes isDev = true. Your observation confirms it: renders correctly, warns once. Deferred.
+
+Changed
+
+AWS, already live: Cognito app client 1fsqemb8fhmhon198oafnbv48u — LogoutURLs set to ["https://main.d184n5jh1hilpp.amplifyapp.com/"]. One field of 21.
+
+Code, not committed:
+
+┌───────────────────────────────────────────────────────┬───────────────┐
+│                         File                          │      Fix      │
+├───────────────────────────────────────────────────────┼───────────────┤
+│ frontend/src/components/Layout.jsx                    │ 1, 2 and 3    │
+├───────────────────────────────────────────────────────┼───────────────┤
+│ frontend/src/App.jsx                                  │ 2             │
+├───────────────────────────────────────────────────────┼───────────────┤
+│ frontend/src/store/useHealthStore.js                  │ 2             │
+├───────────────────────────────────────────────────────┼───────────────┤
+│ frontend/src/components/HistoryStatusBanner.jsx (new) │ 3             │
+├───────────────────────────────────────────────────────┼───────────────┤
+│ FINDINGS.md, POST-CONFERENCE.md                       │ documentation │
+└───────────────────────────────────────────────────────┴───────────────┘
+
+Not touched: main.py, the risk engine, the Pydantic schema, VPC, security groups, RDS, reserved concurrency.
+
+Commits to make
+
+The three fixes are separable everywhere except one 8-line block at the top of Layout.jsx, where the Fix 3 import sits next to the Fix 1 constants. Use line-level staging there:
+
+1. fix(auth): use Cognito sign-out endpoint instead of RP-initiated logout — Layout.jsx lines 10–15 (comment + three constantion.
+2. fix(history): stop the unauthenticated duplicate request and retry once on 401 — all of App.jsx, all of useHealthStore.js, and in Layout.jsx the useEffect guard, the signinSilent destructure and the refresh callback.
+3. feat(history): show the user when history could not be loaded — HistoryStatusBanner.jsx, Layout.jsx line 8 (the import) an line in <main>.
+4. Documentation, separately.
+
+Each commit needs the attribution lines you normally add.
+
+Verification checklist to run after Amplify rebuilds
+
+First, confirm you are testing the new code. This is not yet confirmed — nothing is deployed. After the Amplify build finishes:
+
+curl -s https://main.d184n5jh1hilpp.amplifyapp.com/ | grep -o 'assets/[^"]*'
+
+Expect assets/index-C7kOqnnZ.js and assets/index-Bz1UGlBl.css. If the JS name differs, Amplify built something other than what I built and nothing below is meaningful — tell me before continuing.
+
+Chrome
+
+1. Sign in. History loads. Network tab: exactly one request to /risk/history/..., status 200. Previously there were two, one  check.
+2. No banner appears anywhere.
+3. Sign out. You land back on the WellBeat sign-in page, not on "This page isn't working". The address bar shows the app, andoken.
+4. Sign in again immediately. It works without typing the address manually.
+
+Edge, InPrivate, tracking prevention left on Balanced
+
+5. Repeat steps 1–4. Run the sign-in five times, since this is where the race used to show. History loads every time.
+6. Open Profile. The trend chart draws. Open an assessment so the radar chart draws. Each may log the recharts warning once — that is expected and harmless.
+
+Mobile
+
+7. Sign in, check history loads, sign out, sign back in. Confirm the banner, if you provoke it in step 9, is readable at phone width.
+
+Deliberately provoke an expired session — step 9 is the one that exercises the new message.
+
+8. Sign in and leave the tab open and untouched for just over 60 minutes (ID token validity is 60 minutes). Then reload. Expect it to still work: signinSilent refreshes from the refresh token.
+9. The direct way to force the failure: sign in, then in DevTools → Application → Session Storage, find the oidc.user:... entalue (change a few characters in the middle) and delete the refresh_token field, then reload. The retry cannot succeed, so you should see a rose banner: "Your session has expired, so your assessment history could not be loaded. Sign in again." with a working Sign in again button.
+10. Repeat step 9 but corrupt only the id_token and leave refresh_token intact. Expect no banner — the single retry should reetwork tab shows a 401, a token call, then a 200.
+11. To see the generic message: with DevTools open, set the network to Offline and reload. Expect an amber banner: "Your assessment history could not be loaded."
+12. Finally, confirm an account with genuinely no assessments shows an empty history and no banner at all. That is the distints to make.
+
+If step 1 still shows two history requests, or step 3 still lands on an error page, stop and send me the Network tab entry including the Response Headers — the www-authenticate line is the one that matters.
+
+Open questions for Arman
+
+1. Local development is still broken against Cognito. http://localhost:5173/ is in neither CallbackURLs nor LogoutURLs, so you cannot exercise sign-in or sign-out locally. You asked me to leave it this week and I did; it is POST-CONFERENCE item 9. Say the word if you want it before the talk instead — it is one field.
+2. The banner stays up for the rest of the session once a history load fails. I judged that honest: the past history genuinelew assessment then saves fine. If you would rather it clear after a successful assessment, that is a two-line change and I can make it before you commit.
+3. I could not confirm the deployed hash, only that the pre-change baseline matched exactly. The curl at the top of the checkplify has built.

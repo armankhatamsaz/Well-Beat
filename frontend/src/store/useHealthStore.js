@@ -243,7 +243,10 @@ export const useHealthStore = create((set, get) => ({
                 lipids: { total: metricsWithAge.ldl + metricsWithAge.hdl, hdl: metricsWithAge.hdl }
             };
 
-            set({ assessment: result, userMetrics: legacyMetrics });
+            // A successful assessment clears the history banner. The earlier entries
+            // may still be missing, but the user has just seen the API work, so
+            // leaving a failure message up would be more confusing than helpful.
+            set({ assessment: result, userMetrics: legacyMetrics, historyError: null });
             get().saveAssessment(result, legacyMetrics);
 
         } catch (error) {
